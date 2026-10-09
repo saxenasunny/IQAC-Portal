@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Badge, Button, Card, PageHeader, ProgressBar, Select, statusTone } from '@/components/ui'
 import { canVerify, canWriteData } from '@/lib/access'
@@ -12,7 +13,11 @@ export function AccreditationDashboardPage() {
   const fw = catalog.frameworks.find((f) => f.code === code) ?? catalog.frameworks[0]
   const version = catalog.frameworkVersions.find((v) => v.frameworkId === fw.id)
   const categories = catalog.frameworkCategories.filter((c) => c.frameworkVersionId === version?.id)
-  const requirements = usePortalStore((s) => s.requirements.filter((r) => r.frameworkVersionId === version?.id))
+  const allRequirements = usePortalStore((s) => s.requirements)
+  const requirements = useMemo(
+    () => allRequirements.filter((r) => r.frameworkVersionId === version?.id),
+    [allRequirements, version?.id],
+  )
   const overall = requirements.length ? Math.round(requirements.reduce((a, b) => a + b.progress, 0) / requirements.length) : 0
 
   return (
@@ -68,9 +73,15 @@ export function RequirementDetailPage() {
   const user = usePortalStore((s) => s.currentUser)!
   const requirement = usePortalStore((s) => s.requirements.find((r) => r.id === id))
   const updateRequirement = usePortalStore((s) => s.updateRequirement)
-  const documents = usePortalStore((s) => s.documents.filter((d) => d.linkedRequirementIds.includes(id ?? '')))
-  const tasks = usePortalStore((s) => s.tasks.filter((t) => t.requirementId === id))
-  const audit = usePortalStore((s) => s.auditLogs.filter((a) => a.entityId === id))
+  const allDocuments = usePortalStore((s) => s.documents)
+  const documents = useMemo(
+    () => allDocuments.filter((d) => d.linkedRequirementIds.includes(id ?? '')),
+    [allDocuments, id],
+  )
+  const allTasks = usePortalStore((s) => s.tasks)
+  const tasks = useMemo(() => allTasks.filter((t) => t.requirementId === id), [allTasks, id])
+  const allAuditLogs = usePortalStore((s) => s.auditLogs)
+  const audit = useMemo(() => allAuditLogs.filter((a) => a.entityId === id), [allAuditLogs, id])
 
   if (!requirement) return <div><PageHeader title="Requirement not found" /><Button onClick={() => navigate(`/accreditation/${code}`)}>Back</Button></div>
 
