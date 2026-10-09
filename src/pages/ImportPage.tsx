@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Badge, Button, Card, PageHeader, Select } from '@/components/ui'
 import { canImport } from '@/lib/access'
@@ -35,6 +36,7 @@ export function ImportPage() {
   const [job, setJob] = useState<ImportJob | null>(null)
   const [headers, setHeaders] = useState<string[]>([])
   const [mapping, setMapping] = useState<Record<string, string>>({})
+  const [sourceRows, setSourceRows] = useState<Record<string, string>[]>([])
 
   if (!canImport(user.role)) {
     return <div><PageHeader title="Import Data" /><Card className="p-6 text-sm text-navy-600">Your role cannot import institutional data.</Card></div>
@@ -71,6 +73,7 @@ export function ImportPage() {
         previewRows: json.slice(0, 200) as Record<string, string>[],
       }
       setHeaders(cols)
+      setSourceRows(json)
       setMapping(auto)
       setJob(created)
       addImport(created)
@@ -87,7 +90,7 @@ export function ImportPage() {
     let valid = 0
     let warn = 0
     const built: Student[] = []
-    job.previewRows.forEach((row, idx) => {
+    sourceRows.forEach((row, idx) => {
       const get = (field: string) => {
         const col = Object.entries(mapping).find(([, v]) => v === field)?.[0]
         return col ? String(row[col] ?? '').trim() : ''
@@ -155,13 +158,21 @@ export function ImportPage() {
     const newCount = built.filter((b) => !existing.has(b.registrationId.toLowerCase())).length
     const updatedCount = built.length - newCount
     return { errors, valid, warn, built, newCount, updatedCount, unchanged: job.totalRows - built.length - errors.filter((e) => e.severity === 'error').length }
-  }, [job, mapping, students])
+  }, [job, mapping, sourceRows, students])
 
   function confirm() {
     if (!job || !validated) return
     commitImportStudents(validated.built, job.id)
     toast.success('Import committed to central student database')
     setJob({ ...job, status: 'committed' })
+  }
+
+  function downloadValidationReport() {
+    if (!job || !validated?.errors.length) return
+    const worksheet = XLSX.utils.json_to_sheet(validated.errors)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Validation issues')
+    XLSX.writeFile(workbook, `${job.fileName.replace(/\.[^.]+$/, '')}-validation-report.xlsx`)
   }
 
   return (
@@ -211,6 +222,9 @@ export function ImportPage() {
           </div>
           <div className="mt-4 flex gap-2">
             <Button variant="outline" onClick={() => setJob(null)}>Cancel Import</Button>
+            <Button variant="outline" disabled={!validated.errors.length} onClick={downloadValidationReport}>
+              <Download size={16} /> Download Issues
+            </Button>
             <Button disabled={!validated.built.length} onClick={confirm}>Confirm Import</Button>
           </div>
         </Card>
