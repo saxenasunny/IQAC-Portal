@@ -9,6 +9,7 @@ create table if not exists public.student_portal_data (
 
 alter table public.student_portal_data enable row level security;
 
+drop policy if exists student_portal_data_select on public.student_portal_data;
 create policy student_portal_data_select on public.student_portal_data
   for select using (
     exists (

@@ -1,5 +1,5 @@
 -- Reference catalogue seed. No student, faculty, or demo-user records are created.
--- Run after 0001_init.sql. Auth users must be created separately in Supabase Auth
+-- Run after migrations 0001 through 0003. Auth users must be created separately in Supabase Auth
 -- and their UUIDs substituted into public.profiles.
 
 insert into public.institutions (id, name, short_name, type, established_year, naac_grade, nirf_rank, city, state, website)
@@ -15,35 +15,18 @@ values (
   'Rajasthan',
   'https://apex.university'
 )
-on conflict (id) do update set
-  name = excluded.name,
-  short_name = excluded.short_name,
-  type = excluded.type,
-  established_year = excluded.established_year,
-  naac_grade = excluded.naac_grade,
-  nirf_rank = excluded.nirf_rank,
-  city = excluded.city,
-  state = excluded.state,
-  website = excluded.website;
+on conflict do nothing;
 
 insert into public.campuses (id, institution_id, name, city, is_main) values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Main Campus', 'Jaipur', true),
   ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'NCR Campus', 'Noida', false)
-on conflict (id) do update set
-  institution_id = excluded.institution_id,
-  name = excluded.name,
-  city = excluded.city,
-  is_main = excluded.is_main;
+on conflict do nothing;
 
 insert into public.academic_years (id, label, start_date, end_date, is_current) values
   ('00000000-0000-0000-0000-00000000aa01', '2023-24', '2023-07-01', '2024-06-30', false),
   ('00000000-0000-0000-0000-00000000aa02', '2024-25', '2024-07-01', '2025-06-30', false),
   ('00000000-0000-0000-0000-00000000aa03', '2025-26', '2025-07-01', '2026-06-30', true)
-on conflict (id) do update set
-  label = excluded.label,
-  start_date = excluded.start_date,
-  end_date = excluded.end_date,
-  is_current = excluded.is_current;
+on conflict do nothing;
 
 insert into public.frameworks (code, name, description) values
   ('NAAC', 'NAAC', 'National Assessment and Accreditation Council'),
@@ -52,9 +35,7 @@ insert into public.frameworks (code, name, description) values
   ('QS', 'QS', 'QS World University Rankings'),
   ('THE', 'THE', 'Times Higher Education Rankings'),
   ('SUS', 'Sustainability', 'Sustainability and green rankings')
-on conflict (code) do update set
-  name = excluded.name,
-  description = excluded.description;
+on conflict do nothing;
 
 insert into public.schools (id, institution_id, campus_id, code, name, dean_name)
 select
@@ -71,11 +52,7 @@ from (values
   (4, 'SOL', 'School of Law', '', 2),
   (5, 'SOH', 'School of Humanities', '', 1)
 ) as s(seq, code, name, dean_name, campus_seq)
-on conflict (code) do update set
-  institution_id = excluded.institution_id,
-  campus_id = excluded.campus_id,
-  name = excluded.name,
-  dean_name = excluded.dean_name;
+on conflict do nothing;
 
 insert into public.departments (id, school_id, code, name, hod_name, established_year)
 select
@@ -99,11 +76,7 @@ from (values
   (11, 'SOE', 'SES', 'School of Engineering & Sciences', '', 2026)
 ) as d(seq, school_code, code, name, hod_name, established_year)
 join public.schools s on s.code = d.school_code
-on conflict (code) do update set
-  school_id = excluded.school_id,
-  name = excluded.name,
-  hod_name = excluded.hod_name,
-  established_year = excluded.established_year;
+on conflict do nothing;
 
 insert into public.programmes (id, department_id, code, name, level, duration_years, intake, is_active)
 select
@@ -116,7 +89,7 @@ select
   p.intake,
   true
 from (values
-  (1, 'CSE', 'BTECH-CSE', 'B.Tech Computer Science', 'UG', null, null),
+  (1, 'CSE', 'BTECH-CSE', 'B.Tech Computer Science', 'UG', null::numeric, null::integer),
   (2, 'CSE', 'BTECH-AI', 'B.Tech Artificial Intelligence', 'UG', null, null),
   (3, 'CSE', 'MTECH-CSE', 'M.Tech Computer Science', 'PG', null, null),
   (4, 'CSE', 'PHD-CSE', 'Ph.D Computer Science', 'Doctoral', null, null),
@@ -170,13 +143,7 @@ from (values
   (52, 'SES', 'SES-BTECH-ECE-QUANTUM', 'B.Tech. in Electronics and Communication Engineering with Specialization in Quantum Technology', 'UG', null, null)
 ) as p(seq, department_code, code, name, level, duration_years, intake)
 join public.departments d on d.code = p.department_code
-on conflict (code) do update set
-  department_id = excluded.department_id,
-  name = excluded.name,
-  level = excluded.level,
-  duration_years = excluded.duration_years,
-  intake = excluded.intake,
-  is_active = excluded.is_active;
+on conflict do nothing;
 
 insert into public.batches (id, programme_id, academic_year_id, year, label)
 select
@@ -188,9 +155,7 @@ select
 from public.programmes p
 cross join (values (2023), (2024), (2025)) as y(year)
 join public.academic_years ay on ay.label = (y.year::text || '-' || right((y.year + 1)::text, 2))
-on conflict (programme_id, year) do update set
-  academic_year_id = excluded.academic_year_id,
-  label = excluded.label;
+on conflict do nothing;
 
 insert into public.sections (id, batch_id, name)
 select md5('section:' || b.id::text || ':' || section.name)::uuid, b.id, section.name

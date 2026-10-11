@@ -54,17 +54,17 @@ Demo users and demo student/faculty records are not included. Configure Supabase
 Copy `.env.example` to `.env` when connecting a real Supabase project:
 
 ```
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
 ```
 
-Do not commit `.env`. Supabase is required for sign-in, user management, and saving institutional records. Without it, the app shows setup guidance instead of seeded demo data.
+These are public browser settings: the Supabase project URL and anon/publishable key are included in the client bundle by design. They are not secrets; access must be protected by Supabase Row Level Security and policies. Vite explicitly injects only these two unprefixed variables into the frontend. Never use the `service_role` or secret key in either variable or in frontend code. Do not commit `.env`. Supabase is required for sign-in, user management, and saving institutional records. Without it, the app shows setup guidance instead of seeded demo data.
 
 ## Supabase Setup
 
 1. Create a Supabase project.
-2. Run `supabase/migrations/0001_init.sql`, `0002_student_import_sync.sql`, then `0003_remove_generated_demo_records.sql`.
-3. Run `supabase/seed/seed.sql` to load the reference catalogue; it does not create student, faculty, or user records. Unverified programme durations, intakes, dean names, and HOD names are left blank.
+2. Run `supabase/migrations/0001_init.sql`, `0002_student_import_sync.sql`, then `0003_remove_generated_demo_records.sql`. These scripts are safe to rerun: existing schema objects are retained, the named policies are refreshed, and the cleanup only removes known generated rows or values that still exactly match the old generated seed.
+3. Run `supabase/seed/seed.sql` to add missing reference catalogue rows. Existing rows are left unchanged; it does not create student, faculty, or user records. Unverified programme durations, intakes, dean names, and HOD names are left blank.
 4. Create the first administrator in Supabase Auth. Insert a matching active row into `public.profiles` using that Auth user UUID and role `super_admin`. This one-time bootstrap is required because no account exists yet to authorize user creation.
 5. Deploy the secure account-provisioning function with the Supabase CLI: `supabase functions deploy create-portal-user`. Only active super/IQAC administrators can create users from **Administration → Users**. Passwords are set by the administrator and are never stored or logged by the portal.
 6. Configure the frontend environment variables and create a private Storage bucket named `evidence` if document storage is enabled.

@@ -6,53 +6,80 @@ create extension if not exists "pgcrypto";
 -- ---------------------------------------------------------------------------
 -- Enumerations
 -- ---------------------------------------------------------------------------
-create type user_role as enum (
-  'super_admin',
-  'iqac_admin',
-  'iqac_viewer',
-  'registrar',
-  'dean',
-  'hod',
-  'faculty',
-  'data_entry',
-  'verifier',
-  'auditor'
-);
+do $$ begin
+  create type user_role as enum (
+    'super_admin',
+    'iqac_admin',
+    'iqac_viewer',
+    'registrar',
+    'dean',
+    'hod',
+    'faculty',
+    'data_entry',
+    'verifier',
+    'auditor'
+  );
+exception when duplicate_object then null;
+end $$;
 
-create type workflow_status as enum (
-  'draft',
-  'submitted',
-  'under_review',
-  'verified',
-  'approved',
-  'rejected',
-  'needs_revision',
-  'change_requested',
-  'revised',
-  're_verified'
-);
+do $$ begin
+  create type workflow_status as enum (
+    'draft',
+    'submitted',
+    'under_review',
+    'verified',
+    'approved',
+    'rejected',
+    'needs_revision',
+    'change_requested',
+    'revised',
+    're_verified'
+  );
+exception when duplicate_object then null;
+end $$;
 
-create type student_status as enum ('active', 'inactive', 'graduated', 'alumni', 'withdrawn', 'suspended');
-create type academic_status as enum ('regular', 'lateral', 're_admitted', 'detained');
-create type gender_type as enum ('male', 'female', 'other', 'prefer_not_to_say');
-create type employment_type as enum ('permanent', 'contract', 'visiting', 'adjunct');
-create type document_status as enum ('draft', 'submitted', 'verified', 'approved', 'expired', 'superseded');
-create type import_status as enum ('uploaded', 'mapped', 'validated', 'previewed', 'committed', 'failed', 'cancelled');
-create type requirement_status as enum (
-  'not_started',
-  'data_collection',
-  'submitted',
-  'under_review',
-  'verified',
-  'approved',
-  'rejected',
-  'needs_revision'
-);
+do $$ begin
+  create type student_status as enum ('active', 'inactive', 'graduated', 'alumni', 'withdrawn', 'suspended');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type academic_status as enum ('regular', 'lateral', 're_admitted', 'detained');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type gender_type as enum ('male', 'female', 'other', 'prefer_not_to_say');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type employment_type as enum ('permanent', 'contract', 'visiting', 'adjunct');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type document_status as enum ('draft', 'submitted', 'verified', 'approved', 'expired', 'superseded');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type import_status as enum ('uploaded', 'mapped', 'validated', 'previewed', 'committed', 'failed', 'cancelled');
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  create type requirement_status as enum (
+    'not_started',
+    'data_collection',
+    'submitted',
+    'under_review',
+    'verified',
+    'approved',
+    'rejected',
+    'needs_revision'
+  );
+exception when duplicate_object then null;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Identity & access
 -- ---------------------------------------------------------------------------
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text unique not null,
   full_name text not null,
@@ -66,7 +93,7 @@ create table public.profiles (
   updated_at timestamptz not null default now()
 );
 
-create table public.roles (
+create table if not exists public.roles (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
   name text not null,
@@ -74,26 +101,26 @@ create table public.roles (
   created_at timestamptz not null default now()
 );
 
-create table public.permissions (
+create table if not exists public.permissions (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
   name text not null,
   module text not null
 );
 
-create table public.role_permissions (
+create table if not exists public.role_permissions (
   role_id uuid not null references public.roles(id) on delete cascade,
   permission_id uuid not null references public.permissions(id) on delete cascade,
   primary key (role_id, permission_id)
 );
 
-create table public.user_roles (
+create table if not exists public.user_roles (
   user_id uuid not null references public.profiles(id) on delete cascade,
   role_id uuid not null references public.roles(id) on delete cascade,
   primary key (user_id, role_id)
 );
 
-create table public.user_departments (
+create table if not exists public.user_departments (
   user_id uuid not null references public.profiles(id) on delete cascade,
   department_id uuid not null,
   primary key (user_id, department_id)
@@ -102,7 +129,7 @@ create table public.user_departments (
 -- ---------------------------------------------------------------------------
 -- Institution structure
 -- ---------------------------------------------------------------------------
-create table public.institutions (
+create table if not exists public.institutions (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   short_name text not null,
@@ -119,7 +146,7 @@ create table public.institutions (
   created_at timestamptz not null default now()
 );
 
-create table public.campuses (
+create table if not exists public.campuses (
   id uuid primary key default gen_random_uuid(),
   institution_id uuid not null references public.institutions(id),
   name text not null,
@@ -127,7 +154,7 @@ create table public.campuses (
   is_main boolean not null default false
 );
 
-create table public.schools (
+create table if not exists public.schools (
   id uuid primary key default gen_random_uuid(),
   institution_id uuid not null references public.institutions(id),
   campus_id uuid references public.campuses(id),
@@ -137,7 +164,7 @@ create table public.schools (
   created_at timestamptz not null default now()
 );
 
-create table public.departments (
+create table if not exists public.departments (
   id uuid primary key default gen_random_uuid(),
   school_id uuid not null references public.schools(id),
   code text unique not null,
@@ -147,7 +174,7 @@ create table public.departments (
   created_at timestamptz not null default now()
 );
 
-create table public.academic_years (
+create table if not exists public.academic_years (
   id uuid primary key default gen_random_uuid(),
   label text unique not null,
   start_date date not null,
@@ -155,19 +182,19 @@ create table public.academic_years (
   is_current boolean not null default false
 );
 
-create table public.programmes (
+create table if not exists public.programmes (
   id uuid primary key default gen_random_uuid(),
   department_id uuid not null references public.departments(id),
   code text unique not null,
   name text not null,
   level text not null,
-  duration_years numeric(3,1) not null,
+  duration_years numeric(3,1),
   intake integer,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
-create table public.programme_versions (
+create table if not exists public.programme_versions (
   id uuid primary key default gen_random_uuid(),
   programme_id uuid not null references public.programmes(id),
   version_label text not null,
@@ -175,7 +202,7 @@ create table public.programme_versions (
   unique (programme_id, version_label)
 );
 
-create table public.batches (
+create table if not exists public.batches (
   id uuid primary key default gen_random_uuid(),
   programme_id uuid not null references public.programmes(id),
   academic_year_id uuid references public.academic_years(id),
@@ -184,24 +211,32 @@ create table public.batches (
   unique (programme_id, year)
 );
 
-create table public.sections (
+create table if not exists public.sections (
   id uuid primary key default gen_random_uuid(),
   batch_id uuid not null references public.batches(id),
   name text not null,
   unique (batch_id, name)
 );
 
-alter table public.profiles
-  add constraint profiles_school_fk foreign key (school_id) references public.schools(id),
-  add constraint profiles_department_fk foreign key (department_id) references public.departments(id);
-
-alter table public.user_departments
-  add constraint user_departments_dept_fk foreign key (department_id) references public.departments(id);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'profiles_school_fk' and conrelid = 'public.profiles'::regclass) then
+    alter table public.profiles add constraint profiles_school_fk
+      foreign key (school_id) references public.schools(id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'profiles_department_fk' and conrelid = 'public.profiles'::regclass) then
+    alter table public.profiles add constraint profiles_department_fk
+      foreign key (department_id) references public.departments(id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'user_departments_dept_fk' and conrelid = 'public.user_departments'::regclass) then
+    alter table public.user_departments add constraint user_departments_dept_fk
+      foreign key (department_id) references public.departments(id);
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- Students (normalized, sensitive data isolated)
 -- ---------------------------------------------------------------------------
-create table public.students (
+create table if not exists public.students (
   id uuid primary key default gen_random_uuid(),
   registration_id text unique not null,
   application_number text unique,
@@ -229,7 +264,7 @@ create table public.students (
   updated_at timestamptz not null default now()
 );
 
-create table public.student_personal (
+create table if not exists public.student_personal (
   student_id uuid primary key references public.students(id) on delete cascade,
   first_name text,
   middle_name text,
@@ -247,7 +282,7 @@ create table public.student_personal (
   sub_caste text
 );
 
-create table public.student_academic (
+create table if not exists public.student_academic (
   student_id uuid primary key references public.students(id) on delete cascade,
   cgpa numeric(4,2),
   percentage numeric(5,2),
@@ -259,7 +294,7 @@ create table public.student_academic (
   graduation_date date
 );
 
-create table public.student_contact (
+create table if not exists public.student_contact (
   student_id uuid primary key references public.students(id) on delete cascade,
   personal_email text,
   alternate_phone text,
@@ -267,7 +302,7 @@ create table public.student_contact (
   emergency_contact_phone text
 );
 
-create table public.student_addresses (
+create table if not exists public.student_addresses (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references public.students(id) on delete cascade,
   address_type text not null,
@@ -279,7 +314,7 @@ create table public.student_addresses (
   country text default 'India'
 );
 
-create table public.student_family (
+create table if not exists public.student_family (
   student_id uuid primary key references public.students(id) on delete cascade,
   father_name text,
   father_occupation text,
@@ -290,7 +325,7 @@ create table public.student_family (
   annual_income numeric(12,2)
 );
 
-create table public.student_guardians (
+create table if not exists public.student_guardians (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references public.students(id) on delete cascade,
   name text not null,
@@ -299,7 +334,7 @@ create table public.student_guardians (
   email text
 );
 
-create table public.student_qualifications (
+create table if not exists public.student_qualifications (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references public.students(id) on delete cascade,
   level text not null,
@@ -310,7 +345,7 @@ create table public.student_qualifications (
   subjects text
 );
 
-create table public.student_entrance_exams (
+create table if not exists public.student_entrance_exams (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references public.students(id) on delete cascade,
   exam_name text not null,
@@ -320,7 +355,7 @@ create table public.student_entrance_exams (
   year integer
 );
 
-create table public.student_experience (
+create table if not exists public.student_experience (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references public.students(id) on delete cascade,
   organisation text,
@@ -331,14 +366,14 @@ create table public.student_experience (
   salary numeric(12,2)
 );
 
-create table public.student_mentor_mapping (
+create table if not exists public.student_mentor_mapping (
   student_id uuid primary key references public.students(id) on delete cascade,
   mentor_name text,
   mentor_email text,
   mentor_phone text
 );
 
-create table public.student_sensitive (
+create table if not exists public.student_sensitive (
   student_id uuid primary key references public.students(id) on delete cascade,
   aadhaar text,
   pan text,
@@ -349,7 +384,7 @@ create table public.student_sensitive (
   abc_id text
 );
 
-create table public.student_status_history (
+create table if not exists public.student_status_history (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references public.students(id) on delete cascade,
   old_status text,
@@ -362,7 +397,7 @@ create table public.student_status_history (
 -- ---------------------------------------------------------------------------
 -- Faculty
 -- ---------------------------------------------------------------------------
-create table public.faculty (
+create table if not exists public.faculty (
   id uuid primary key default gen_random_uuid(),
   employee_id text unique not null,
   full_name text not null,
@@ -390,7 +425,7 @@ create table public.faculty (
   updated_at timestamptz not null default now()
 );
 
-create table public.faculty_qualifications (
+create table if not exists public.faculty_qualifications (
   id uuid primary key default gen_random_uuid(),
   faculty_id uuid not null references public.faculty(id) on delete cascade,
   degree text not null,
@@ -399,7 +434,7 @@ create table public.faculty_qualifications (
   year integer
 );
 
-create table public.faculty_experience (
+create table if not exists public.faculty_experience (
   id uuid primary key default gen_random_uuid(),
   faculty_id uuid not null references public.faculty(id) on delete cascade,
   organisation text,
@@ -408,7 +443,7 @@ create table public.faculty_experience (
   end_date date
 );
 
-create table public.faculty_publications (
+create table if not exists public.faculty_publications (
   id uuid primary key default gen_random_uuid(),
   faculty_id uuid not null references public.faculty(id) on delete cascade,
   title text not null,
@@ -417,7 +452,7 @@ create table public.faculty_publications (
   indexed_in text
 );
 
-create table public.faculty_projects (
+create table if not exists public.faculty_projects (
   id uuid primary key default gen_random_uuid(),
   faculty_id uuid not null references public.faculty(id) on delete cascade,
   title text not null,
@@ -427,7 +462,7 @@ create table public.faculty_projects (
   status text
 );
 
-create table public.faculty_patents (
+create table if not exists public.faculty_patents (
   id uuid primary key default gen_random_uuid(),
   faculty_id uuid not null references public.faculty(id) on delete cascade,
   title text not null,
@@ -436,7 +471,7 @@ create table public.faculty_patents (
   status text
 );
 
-create table public.faculty_awards (
+create table if not exists public.faculty_awards (
   id uuid primary key default gen_random_uuid(),
   faculty_id uuid not null references public.faculty(id) on delete cascade,
   title text not null,
@@ -444,7 +479,7 @@ create table public.faculty_awards (
   year integer
 );
 
-create table public.faculty_department_history (
+create table if not exists public.faculty_department_history (
   id uuid primary key default gen_random_uuid(),
   faculty_id uuid not null references public.faculty(id) on delete cascade,
   department_id uuid references public.departments(id),
@@ -452,7 +487,7 @@ create table public.faculty_department_history (
   to_date date
 );
 
-create table public.faculty_designation_history (
+create table if not exists public.faculty_designation_history (
   id uuid primary key default gen_random_uuid(),
   faculty_id uuid not null references public.faculty(id) on delete cascade,
   designation text not null,
@@ -463,7 +498,7 @@ create table public.faculty_designation_history (
 -- ---------------------------------------------------------------------------
 -- Documents & evidence
 -- ---------------------------------------------------------------------------
-create table public.documents (
+create table if not exists public.documents (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   document_type text not null,
@@ -480,7 +515,7 @@ create table public.documents (
   updated_at timestamptz not null default now()
 );
 
-create table public.document_versions (
+create table if not exists public.document_versions (
   id uuid primary key default gen_random_uuid(),
   document_id uuid not null references public.documents(id) on delete cascade,
   version integer not null,
@@ -494,13 +529,13 @@ create table public.document_versions (
   unique (document_id, version)
 );
 
-create table public.student_documents (
+create table if not exists public.student_documents (
   student_id uuid not null references public.students(id) on delete cascade,
   document_id uuid not null references public.documents(id) on delete cascade,
   primary key (student_id, document_id)
 );
 
-create table public.faculty_documents (
+create table if not exists public.faculty_documents (
   faculty_id uuid not null references public.faculty(id) on delete cascade,
   document_id uuid not null references public.documents(id) on delete cascade,
   primary key (faculty_id, document_id)
@@ -509,7 +544,7 @@ create table public.faculty_documents (
 -- ---------------------------------------------------------------------------
 -- Framework engine
 -- ---------------------------------------------------------------------------
-create table public.frameworks (
+create table if not exists public.frameworks (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
   name text not null,
@@ -517,7 +552,7 @@ create table public.frameworks (
   is_active boolean not null default true
 );
 
-create table public.framework_versions (
+create table if not exists public.framework_versions (
   id uuid primary key default gen_random_uuid(),
   framework_id uuid not null references public.frameworks(id),
   version_label text not null,
@@ -526,7 +561,7 @@ create table public.framework_versions (
   unique (framework_id, version_label)
 );
 
-create table public.framework_categories (
+create table if not exists public.framework_categories (
   id uuid primary key default gen_random_uuid(),
   framework_version_id uuid not null references public.framework_versions(id),
   code text not null,
@@ -535,7 +570,7 @@ create table public.framework_categories (
   sort_order integer default 0
 );
 
-create table public.framework_indicators (
+create table if not exists public.framework_indicators (
   id uuid primary key default gen_random_uuid(),
   category_id uuid not null references public.framework_categories(id),
   code text not null,
@@ -543,7 +578,7 @@ create table public.framework_indicators (
   description text
 );
 
-create table public.framework_requirements (
+create table if not exists public.framework_requirements (
   id uuid primary key default gen_random_uuid(),
   indicator_id uuid references public.framework_indicators(id),
   framework_version_id uuid not null references public.framework_versions(id),
@@ -563,7 +598,7 @@ create table public.framework_requirements (
   computed_value text
 );
 
-create table public.framework_tasks (
+create table if not exists public.framework_tasks (
   id uuid primary key default gen_random_uuid(),
   requirement_id uuid not null references public.framework_requirements(id) on delete cascade,
   title text not null,
@@ -574,7 +609,7 @@ create table public.framework_tasks (
   created_at timestamptz not null default now()
 );
 
-create table public.framework_submissions (
+create table if not exists public.framework_submissions (
   id uuid primary key default gen_random_uuid(),
   framework_version_id uuid not null references public.framework_versions(id),
   submitted_at timestamptz,
@@ -584,7 +619,7 @@ create table public.framework_submissions (
   snapshot_at timestamptz
 );
 
-create table public.document_requirement_links (
+create table if not exists public.document_requirement_links (
   document_id uuid not null references public.documents(id) on delete cascade,
   requirement_id uuid not null references public.framework_requirements(id) on delete cascade,
   primary key (document_id, requirement_id)
@@ -593,7 +628,7 @@ create table public.document_requirement_links (
 -- ---------------------------------------------------------------------------
 -- Imports, audit, notifications
 -- ---------------------------------------------------------------------------
-create table public.imports (
+create table if not exists public.imports (
   id uuid primary key default gen_random_uuid(),
   entity text not null,
   file_name text not null,
@@ -611,7 +646,7 @@ create table public.imports (
   committed_at timestamptz
 );
 
-create table public.import_errors (
+create table if not exists public.import_errors (
   id uuid primary key default gen_random_uuid(),
   import_id uuid not null references public.imports(id) on delete cascade,
   row_number integer,
@@ -620,7 +655,7 @@ create table public.import_errors (
   message text not null
 );
 
-create table public.audit_logs (
+create table if not exists public.audit_logs (
   id uuid primary key default gen_random_uuid(),
   actor_id uuid references public.profiles(id),
   actor_name text,
@@ -634,7 +669,7 @@ create table public.audit_logs (
   created_at timestamptz not null default now()
 );
 
-create table public.notifications (
+create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.profiles(id),
   title text not null,
@@ -647,16 +682,16 @@ create table public.notifications (
 -- ---------------------------------------------------------------------------
 -- Indexes
 -- ---------------------------------------------------------------------------
-create index idx_students_name on public.students (full_name);
-create index idx_students_programme on public.students (programme_id);
-create index idx_students_department on public.students (department_id);
-create index idx_students_status on public.students (student_status);
-create index idx_students_batch on public.students (batch_id);
-create index idx_faculty_department on public.faculty (department_id);
-create index idx_faculty_name on public.faculty (full_name);
-create index idx_documents_type on public.documents (document_type);
-create index idx_audit_entity on public.audit_logs (entity, entity_id);
-create index idx_requirements_status on public.framework_requirements (status);
+create index if not exists idx_students_name on public.students (full_name);
+create index if not exists idx_students_programme on public.students (programme_id);
+create index if not exists idx_students_department on public.students (department_id);
+create index if not exists idx_students_status on public.students (student_status);
+create index if not exists idx_students_batch on public.students (batch_id);
+create index if not exists idx_faculty_department on public.faculty (department_id);
+create index if not exists idx_faculty_name on public.faculty (full_name);
+create index if not exists idx_documents_type on public.documents (document_type);
+create index if not exists idx_audit_entity on public.audit_logs (entity, entity_id);
+create index if not exists idx_requirements_status on public.framework_requirements (status);
 
 -- ---------------------------------------------------------------------------
 -- Updated_at trigger
@@ -669,12 +704,16 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_students_updated on public.students;
 create trigger trg_students_updated before update on public.students
   for each row execute function public.set_updated_at();
+drop trigger if exists trg_faculty_updated on public.faculty;
 create trigger trg_faculty_updated before update on public.faculty
   for each row execute function public.set_updated_at();
+drop trigger if exists trg_profiles_updated on public.profiles;
 create trigger trg_profiles_updated before update on public.profiles
   for each row execute function public.set_updated_at();
+drop trigger if exists trg_documents_updated on public.documents;
 create trigger trg_documents_updated before update on public.documents
   for each row execute function public.set_updated_at();
 
@@ -713,6 +752,34 @@ $$;
 -- ---------------------------------------------------------------------------
 -- Row Level Security
 -- ---------------------------------------------------------------------------
+-- Recreate these named policies on reruns so that the access rules below remain current.
+drop policy if exists profiles_self on public.profiles;
+drop policy if exists profiles_admin_write on public.profiles;
+drop policy if exists schools_read on public.schools;
+drop policy if exists departments_read on public.departments;
+drop policy if exists programmes_read on public.programmes;
+drop policy if exists schools_write on public.schools;
+drop policy if exists departments_write on public.departments;
+drop policy if exists programmes_write on public.programmes;
+drop policy if exists students_select on public.students;
+drop policy if exists students_write on public.students;
+drop policy if exists student_sensitive_select on public.student_sensitive;
+drop policy if exists student_sensitive_write on public.student_sensitive;
+drop policy if exists student_personal_select on public.student_personal;
+drop policy if exists faculty_select on public.faculty;
+drop policy if exists faculty_write on public.faculty;
+drop policy if exists documents_select on public.documents;
+drop policy if exists documents_write on public.documents;
+drop policy if exists document_versions_select on public.document_versions;
+drop policy if exists frameworks_read on public.frameworks;
+drop policy if exists frameworks_write on public.frameworks;
+drop policy if exists requirements_read on public.framework_requirements;
+drop policy if exists requirements_write on public.framework_requirements;
+drop policy if exists audit_admin on public.audit_logs;
+drop policy if exists audit_insert on public.audit_logs;
+drop policy if exists imports_admin on public.imports;
+drop policy if exists notifications_own on public.notifications;
+
 alter table public.profiles enable row level security;
 alter table public.students enable row level security;
 alter table public.student_personal enable row level security;
