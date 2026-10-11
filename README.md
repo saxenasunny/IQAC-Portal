@@ -63,7 +63,7 @@ These are public browser settings: the Supabase project URL and anon/publishable
 ## Supabase Setup
 
 1. Create a Supabase project.
-2. Run `supabase/migrations/0001_init.sql`, `0002_student_import_sync.sql`, `0003_remove_generated_demo_records.sql`, then `0004_extended_student_import_attributes.sql`. These scripts are safe to rerun: existing schema objects are retained, the named policies are refreshed, and the cleanup only removes known generated rows or values that still exactly match the old generated seed.
+2. Run `supabase/migrations/0001_init.sql`, `0002_student_import_sync.sql`, `0003_remove_generated_demo_records.sql`, `0004_extended_student_import_attributes.sql`, then `0005_normalize_student_import_identifiers.sql`. These scripts are safe to rerun: existing schema objects are retained, the named policies are refreshed, and the cleanup only removes known generated rows or values that still exactly match the old generated seed.
 3. Run `supabase/seed/seed.sql` to add missing reference catalogue rows. Existing rows are left unchanged; it does not create student, faculty, or user records. Unverified programme durations, intakes, dean names, and HOD names are left blank.
 4. Create the first administrator in Supabase Auth. Insert a matching active row into `public.profiles` using that Auth user UUID and role `super_admin`. This one-time bootstrap is required because no account exists yet to authorize user creation.
 5. Deploy the secure account-provisioning function with the Supabase CLI: `supabase functions deploy create-portal-user`. Only active super/IQAC administrators can create users from **Administration → Users**. Passwords are set by the administrator and are never stored or logged by the portal.

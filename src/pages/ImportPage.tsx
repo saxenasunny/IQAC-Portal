@@ -190,6 +190,11 @@ function normalizeImportValue(value: string) {
     .trim()
 }
 
+function cleanOptionalImportValue(value: string): string {
+  const trimmed = value.trim()
+  return /^(?:[-–—]+|n\/?a|null|undefined|none|not applicable)$/i.test(trimmed) ? '' : trimmed
+}
+
 function fieldForHeader(header: string): ImportFieldId {
   const normalized = normalizeImportValue(header)
   return FIELD_BY_ALIAS.get(normalized)
@@ -341,6 +346,8 @@ export function ImportPage() {
     if (!job) return null
     const existing = new Set(students.map((s) => s.registrationId.toLowerCase()))
     const seen = new Set<string>()
+    const seenApplicationNumbers = new Set<string>()
+    const seenUniversityRollNumbers = new Set<string>()
     const errors: ImportJob['errors'] = []
     let valid = 0
     let warn = 0
@@ -348,7 +355,7 @@ export function ImportPage() {
     sourceRows.forEach((row, idx) => {
       const get = (field: ImportFieldId) => {
         const col = Object.entries(mapping).find(([, value]) => value === field)?.[0]
-        return col ? String(row[col] ?? '').trim() : ''
+        return col ? cleanOptionalImportValue(String(row[col] ?? '')) : ''
       }
       const registrationId = get('registrationId')
       const existingStudent = registrationId
@@ -365,6 +372,29 @@ export function ImportPage() {
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) issues.push({ row: idx + 2, severity: 'error', field: 'email', message: 'Invalid email' })
       if (registrationId && seen.has(registrationId.toLowerCase())) issues.push({ row: idx + 2, severity: 'error', field: 'registrationId', message: 'Duplicate Registration ID in file' })
       if (registrationId) seen.add(registrationId.toLowerCase())
+      const applicationNumber = get('applicationNumber')
+        || cleanOptionalImportValue(existingStudent?.applicationNumber ?? '')
+        || `APP${registrationId}`
+      const universityRollNumber = get('universityRollNumber')
+        || cleanOptionalImportValue(existingStudent?.universityRollNumber ?? '')
+      const existingWithApplicationNumber = students.find((student) =>
+        student.registrationId.toLowerCase() !== existingStudent?.registrationId.toLowerCase()
+        && applicationNumber
+        && cleanOptionalImportValue(student.applicationNumber).toLowerCase() === applicationNumber.toLowerCase(),
+      )
+      if (applicationNumber && (seenApplicationNumbers.has(applicationNumber.toLowerCase()) || existingWithApplicationNumber)) {
+        issues.push({ row: idx + 2, severity: 'error', field: 'applicationNumber', message: `Duplicate Application Number "${applicationNumber}"` })
+      }
+      if (applicationNumber) seenApplicationNumbers.add(applicationNumber.toLowerCase())
+      const existingWithUniversityRollNumber = students.find((student) =>
+        student.registrationId.toLowerCase() !== existingStudent?.registrationId.toLowerCase()
+        && universityRollNumber
+        && cleanOptionalImportValue(student.universityRollNumber).toLowerCase() === universityRollNumber.toLowerCase(),
+      )
+      if (universityRollNumber && (seenUniversityRollNumbers.has(universityRollNumber.toLowerCase()) || existingWithUniversityRollNumber)) {
+        issues.push({ row: idx + 2, severity: 'error', field: 'universityRollNumber', message: `Duplicate University Roll Number "${universityRollNumber}"` })
+      }
+      if (universityRollNumber) seenUniversityRollNumbers.add(universityRollNumber.toLowerCase())
       const programme = findProgrammeMatch(programmeName)
       if (programmeName && !programme) issues.push({ row: idx + 2, severity: 'error', field: 'programme', message: `Unknown programme: ${programmeName}` })
       const departmentName = get('department')
@@ -474,8 +504,8 @@ export function ImportPage() {
       built.push({
         id: uid('stu'),
         registrationId,
-        applicationNumber: get('applicationNumber') || existingStudent?.applicationNumber || `APP${registrationId}`,
-        universityRollNumber: get('universityRollNumber') || existingStudent?.universityRollNumber || registrationId,
+        applicationNumber,
+        universityRollNumber,
         fullName,
         email: email || existingStudent?.email || '',
         phone: get('phone') || existingStudent?.phone || '',
