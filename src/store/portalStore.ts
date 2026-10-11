@@ -2,24 +2,16 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
   academicYears,
-  auditLogs as seedAudit,
   batches,
   campuses,
   departments,
-  documents as seedDocs,
-  faculty as seedFaculty,
   frameworkCategories,
-  frameworkRequirements as seedReqs,
-  frameworkTasks as seedTasks,
   frameworkVersions,
   frameworks,
   institution,
-  notifications as seedNotes,
   programmes,
   schools,
   sections,
-  students as seedStudents,
-  demoUsers,
 } from '@/data/seed'
 import type {
   AuditLog,
@@ -31,14 +23,12 @@ import type {
   NotificationItem,
   Profile,
   Student,
-  UserRole,
 } from '@/types'
 import { uid } from '@/lib/utils'
 import { evaluateRequirementFormula } from '@/lib/formulas'
 
 interface PortalState {
-  currentUser: (Profile & { password?: string }) | null
-  users: Array<Profile & { password: string }>
+  currentUser: Profile | null
   students: Student[]
   faculty: Faculty[]
   documents: DocumentRecord[]
@@ -47,9 +37,9 @@ interface PortalState {
   auditLogs: AuditLog[]
   notifications: NotificationItem[]
   imports: ImportJob[]
-  login: (email: string, password: string) => string | null
+  setAuthenticatedUser: (user: Profile | null) => void
+  setStudents: (students: Student[]) => void
   logout: () => void
-  switchRole: (role: UserRole) => void
   upsertStudent: (student: Student, reason?: string) => void
   archiveStudent: (id: string) => void
   upsertFaculty: (row: Faculty, reason?: string) => void
@@ -78,35 +68,23 @@ export const usePortalStore = create<PortalState>()(
   persist(
     (set, get) => ({
       currentUser: null,
-      users: demoUsers,
-      students: seedStudents,
-      faculty: seedFaculty,
-      documents: seedDocs,
-      requirements: seedReqs.map((r) => ({
-        ...r,
-        computedValue: evaluateRequirementFormula(r.formula, seedStudents, seedFaculty) ?? r.computedValue,
-      })),
-      tasks: seedTasks,
-      auditLogs: seedAudit,
-      notifications: seedNotes,
+      students: [],
+      faculty: [],
+      documents: [],
+      requirements: [],
+      tasks: [],
+      auditLogs: [],
+      notifications: [],
       imports: [],
-      login: (email, password) => {
-        const user = get().users.find((u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password && u.isActive)
-        if (!user) return 'Invalid email or password.'
-        set({ currentUser: user })
-        get().addAudit({ action: 'Logged in', entity: 'Session', entityId: user.id })
-        return null
+      setAuthenticatedUser: (user) => set({ currentUser: user }),
+      setStudents: (students) => {
+        set({ students })
+        get().refreshComputed()
       },
       logout: () => {
         const user = get().currentUser
         if (user) get().addAudit({ action: 'Logged out', entity: 'Session', entityId: user.id })
         set({ currentUser: null })
-      },
-      switchRole: (role) => {
-        const current = get().currentUser
-        if (!current) return
-        const match = get().users.find((u) => u.role === role)
-        if (match) set({ currentUser: match })
       },
       upsertStudent: (student, reason) => {
         const existing = get().students.find((s) => s.id === student.id)
@@ -237,18 +215,44 @@ export const usePortalStore = create<PortalState>()(
         })
       },
     }),
-    { name: 'iqac-portal-v1' },
+    {
+      name: 'iqac-portal-v1',
+      version: 1,
+      migrate: (persistedState) => {
+        const persisted = persistedState as Partial<PortalState> & { users?: unknown }
+        const { users: _legacyUsers, ...state } = persisted
+        return {
+          ...state,
+          currentUser: state.currentUser?.id.startsWith('usr_') ? null : state.currentUser ?? null,
+          students: (state.students ?? []).filter((student) => !/^stu_\d+$/.test(student.id)),
+          faculty: (state.faculty ?? []).filter((member) => !/^fac_\d+$/.test(member.id)),
+          documents: (state.documents ?? []).filter((document) =>
+            !['doc_ar', 'doc_ssr', 'doc_phd', 'doc_infra', 'doc_pol', 'doc_green', 'doc_nba', 'doc_int'].includes(document.id),
+          ),
+          requirements: (state.requirements ?? []).filter((requirement) =>
+            ![
+              'req_n_stu', 'req_n_sfr', 'req_n_phd', 'req_n_pub', 'req_n_infra', 'req_n_ss',
+              'req_n_gov', 'req_ir_enr', 'req_ir_fac', 'req_ir_int', 'req_nba_peo',
+              'req_qs_sfr', 'req_the_teach', 'req_sus_sdg',
+            ].includes(requirement.id),
+          ),
+          tasks: (state.tasks ?? []).filter((task) => !/^task_\d+$/.test(task.id)),
+          auditLogs: (state.auditLogs ?? []).filter((log) => !/^aud_\d+$/.test(log.id)),
+          notifications: (state.notifications ?? []).filter((notification) => !/^nt_\d+$/.test(notification.id)),
+        }
+      },
+    },
   ),
 )
 
 export const catalog = {
   institution,
   campuses,
-  schools,
-  departments,
-  programmes,
+  schools: [...schools].sort((a, b) => a.name.localeCompare(b.name)),
+  departments: [...departments].sort((a, b) => a.name.localeCompare(b.name)),
+  programmes: [...programmes].sort((a, b) => a.name.localeCompare(b.name)),
   academicYears,
-  batches,
+  batches: [...batches].sort((a, b) => a.label.localeCompare(b.label)),
   sections,
   frameworks,
   frameworkVersions,

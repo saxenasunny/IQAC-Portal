@@ -1,28 +1,163 @@
-import { Badge, Card, PageHeader } from '@/components/ui'
-import { canSeeAudit, ROLE_LABELS } from '@/lib/access'
+import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
+import { toast } from 'sonner'
+import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select } from '@/components/ui'
+import { canManageUsers, canSeeAudit, ROLE_LABELS } from '@/lib/access'
 import { roleCatalog } from '@/data/seed'
+import { isSupabaseConfigured } from '@/lib/supabase'
+import { userService, type PortalUser } from '@/services/userService'
 import { catalog, usePortalStore } from '@/store/portalStore'
+import type { UserRole } from '@/types'
 
 export function UsersPage() {
-  const users = usePortalStore((s) => s.users)
+  const currentUser = usePortalStore((s) => s.currentUser)!
+  const [users, setUsers] = useState<PortalUser[]>([])
+  const [loading, setLoading] = useState(isSupabaseConfigured)
+  const [error, setError] = useState('')
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [role, setRole] = useState<UserRole>('iqac_viewer')
+  const [schoolCode, setSchoolCode] = useState('')
+  const [departmentCode, setDepartmentCode] = useState('')
+  const canManage = canManageUsers(currentUser.role)
+
+  async function loadUsers() {
+    setLoading(true)
+    setError('')
+    try {
+      setUsers(await userService.list())
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : 'Unable to load portal users.'
+      setError(message)
+      toast.error(message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isSupabaseConfigured && canManage) void loadUsers()
+  }, [canManage])
+
+  async function createUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (password !== confirmPassword) {
+      toast.error('The passwords do not match.')
+      return
+    }
+    setSaving(true)
+    try {
+      await userService.create({
+        fullName: name,
+        email,
+        password,
+        role,
+        ...(role === 'dean' ? { schoolCode } : {}),
+        ...(['hod', 'faculty'].includes(role) ? { departmentCode } : {}),
+      })
+      toast.success(`Created ${email}. Share the initial password securely with the user.`)
+      setOpen(false)
+      setName('')
+      setEmail('')
+      setPassword('')
+      setConfirmPassword('')
+      setRole('iqac_viewer')
+      setSchoolCode('')
+      setDepartmentCode('')
+      await loadUsers()
+    } catch (createError) {
+      const message = createError instanceof Error ? createError.message : 'Unable to create the portal user.'
+      toast.error(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!canManage) {
+    return <div><PageHeader title="Users" /><Card className="p-6 text-sm">Only IQAC and super administrators can manage portal users.</Card></div>
+  }
+
   return (
     <div>
-      <PageHeader title="Users" subtitle="Demo directory. Production uses Supabase Auth + profiles." />
-      <Card className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-navy-950 text-white text-left"><tr>{['Name', 'Email', 'Role', 'Scope'].map((h) => <th key={h} className="px-4 py-3">{h}</th>)}</tr></thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="border-t">
-                <td className="px-4 py-2">{u.fullName}</td>
-                <td className="px-4 py-2">{u.email}</td>
-                <td className="px-4 py-2">{ROLE_LABELS[u.role]}</td>
-                <td className="px-4 py-2">{catalog.departments.find((d) => d.id === u.departmentId)?.name ?? catalog.schools.find((s) => s.id === u.schoolId)?.name ?? 'Institution'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+      <PageHeader
+        title="Users"
+        subtitle="Manage Supabase accounts and assign portal roles and academic scopes."
+        actions={<Button disabled={!isSupabaseConfigured} onClick={() => setOpen(true)}>Create User</Button>}
+      />
+      {!isSupabaseConfigured ? (
+        <Card className="p-6 text-sm text-amber-800">Configure Supabase to create and manage users. Demo users are disabled.</Card>
+      ) : error ? (
+        <Card className="space-y-3 p-6 text-sm">
+          <p className="text-red-700">{error}</p>
+          <Button variant="outline" onClick={() => void loadUsers()}>Retry</Button>
+        </Card>
+      ) : loading ? (
+        <Card className="p-6 text-sm text-navy-500">Loading users…</Card>
+      ) : users.length === 0 ? (
+        <EmptyState title="No portal users yet" body="Create accounts here after the first administrator has been configured in Supabase." />
+      ) : (
+        <Card className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-navy-950 text-left text-white">
+              <tr>{['Name', 'Email', 'Role', 'Scope', 'Status'].map((heading) => <th key={heading} className="px-4 py-3">{heading}</th>)}</tr>
+            </thead>
+            <tbody>
+              {users.map((user) => (
+                <tr key={user.id} className="border-t">
+                  <td className="px-4 py-2">{user.fullName}</td>
+                  <td className="px-4 py-2">{user.email}</td>
+                  <td className="px-4 py-2">{ROLE_LABELS[user.role]}</td>
+                  <td className="px-4 py-2">{catalog.departments.find((department) => department.id === user.departmentId)?.name ?? catalog.schools.find((school) => school.id === user.schoolId)?.name ?? 'Institution-wide'}</td>
+                  <td className="px-4 py-2"><Badge tone={user.isActive ? 'green' : 'red'}>{user.isActive ? 'Active' : 'Inactive'}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+      <Modal open={open} title="Create portal user" onClose={() => { if (!saving) setOpen(false) }}>
+        <form className="space-y-4" onSubmit={(event) => void createUser(event)}>
+          <Field label="Full name"><Input value={name} onChange={(event) => setName(event.target.value)} required maxLength={150} /></Field>
+          <Field label="Email"><Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></Field>
+          <Field label="Role">
+            <Select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
+              {roleCatalog
+                .filter((entry) => currentUser.role === 'super_admin' || entry.role !== 'super_admin')
+                .map((entry) => <option key={entry.role} value={entry.role}>{ROLE_LABELS[entry.role]}</option>)}
+            </Select>
+          </Field>
+          {role === 'dean' ? (
+            <Field label="School scope">
+              <Select value={schoolCode} onChange={(event) => setSchoolCode(event.target.value)} required>
+                <option value="">Select a school</option>
+                {catalog.schools.map((school) => <option key={school.code} value={school.code}>{school.name}</option>)}
+              </Select>
+            </Field>
+          ) : null}
+          {role === 'hod' || role === 'faculty' ? (
+            <Field label="Department scope">
+              <Select value={departmentCode} onChange={(event) => setDepartmentCode(event.target.value)} required>
+                <option value="">Select a department</option>
+                {catalog.departments.map((department) => <option key={department.code} value={department.code}>{department.name}</option>)}
+              </Select>
+            </Field>
+          ) : null}
+          <Field label="Initial password" hint="Use at least 12 characters. Share it with the user through a secure channel.">
+            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required />
+          </Field>
+          <Field label="Confirm password">
+            <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required />
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create user'}</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

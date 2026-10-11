@@ -48,7 +48,7 @@ export function DepartmentsPage() {
       title="Departments"
       subtitle="Department is the primary access boundary for HODs."
       headers={['Code', 'Name', 'School', 'HOD', 'Established']}
-      rows={catalog.departments.map((d) => [d.code, d.name, catalog.schools.find((s) => s.id === d.schoolId)?.name ?? '—', d.hodName, String(d.establishedYear)])}
+      rows={catalog.departments.map((d) => [d.code, d.name, catalog.schools.find((s) => s.id === d.schoolId)?.name ?? '—', d.hodName || '—', d.establishedYear ? String(d.establishedYear) : '—'])}
     />
   )
 }
@@ -59,7 +59,7 @@ export function ProgrammesPage() {
       title="Programmes"
       subtitle="Programmes, duration and sanctioned intake."
       headers={['Code', 'Name', 'Level', 'Department', 'Duration', 'Intake']}
-      rows={catalog.programmes.map((p) => [p.code, p.name, p.level, catalog.departments.find((d) => d.id === p.departmentId)?.name ?? '—', `${p.durationYears} yrs`, String(p.intake)])}
+      rows={catalog.programmes.map((p) => [p.code, p.name, p.level, catalog.departments.find((d) => d.id === p.departmentId)?.name ?? '—', p.durationYears ? `${p.durationYears} yrs` : '—', p.intake ? String(p.intake) : '—'])}
     />
   )
 }

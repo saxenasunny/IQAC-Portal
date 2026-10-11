@@ -82,7 +82,7 @@ export interface Department {
   code: string
   name: string
   hodName: string
-  establishedYear: number
+  establishedYear?: number
 }
 
 export interface AcademicYear {
@@ -99,8 +99,8 @@ export interface Programme {
   code: string
   name: string
   level: string
-  durationYears: number
-  intake: number
+  durationYears?: number
+  intake?: number
   isActive: boolean
 }
 

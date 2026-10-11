@@ -19,6 +19,8 @@ import { catalog, usePortalStore } from '@/store/portalStore'
 import { ROLE_LABELS } from '@/lib/access'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui'
+import { toast } from 'sonner'
+import { authService } from '@/services/authService'
 
 type NavItem = { to: string; label: string }
 type NavGroup = { label: string; icon: typeof LayoutDashboard; items: NavItem[] }
@@ -114,6 +116,16 @@ export function AppLayout() {
   const [q, setQ] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const unread = notifications.filter((n) => !n.isRead).length
+
+  async function signOut() {
+    try {
+      await authService.signOut()
+      logout()
+      navigate('/login')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to sign out.')
+    }
+  }
 
   const crumbs = useMemo(() => {
     const parts = location.pathname.split('/').filter(Boolean)
@@ -247,7 +259,7 @@ export function AppLayout() {
               <p className="text-[11px] text-navy-500">{user ? ROLE_LABELS[user.role] : ''}</p>
             </div>
             <ChevronDown size={14} className="text-navy-400" />
-            <button title="Sign out" onClick={() => { logout(); navigate('/login') }}>
+            <button title="Sign out" onClick={() => void signOut()}>
               <LogOut size={16} />
             </button>
           </div>

@@ -6,13 +6,13 @@ Institution-level portal for Apex University's Internal Quality Assurance Cell. 
 
 - Role-based access (Super Admin, IQAC, Registrar, Dean, HOD, Faculty, Data Entry, Verifier, Auditor)
 - Normalized student and faculty databases (sensitive fields isolated and masked)
-- Schools, departments, programmes, batches
+- Schools, departments, programmes, batches, including the School of Engineering & Sciences department and its offered programme catalogue
 - Excel/CSV student import with mapping for core, academic, personal and contact fields, validation, preview, and retained custom attributes
 - Document repository with versioning and many-to-many evidence links
 - Generic accreditation framework engine (not hard-coded to NAAC)
 - Configurable metric formulas with data lineage
 - Dashboards, reports, data quality, audit logs
-- Demo mode that runs without a live Supabase project
+- Supabase-backed authentication, role-scoped access, and institutional data persistence
 
 ## Technology Stack
 
@@ -47,12 +47,7 @@ npm run dev
 
 Open http://localhost:5173
 
-Demo login (any listed account):
-
-- Email: `iqac.admin@apex.edu`
-- Password: `Portal@2026`
-
-HOD CSE demo: `hod.cse@apex.edu` / `Portal@2026` (Computer Science records only).
+Demo users and demo student/faculty records are not included. Configure Supabase and bootstrap the first administrator before signing in.
 
 ## Environment Variables
 
@@ -63,15 +58,18 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 ```
 
-Do not commit `.env`. The UI runs on seeded local state if these are empty. Student imports currently save to the portal's persisted browser state; they are not written to Supabase.
+Do not commit `.env`. Supabase is required for sign-in, user management, and saving institutional records. Without it, the app shows setup guidance instead of seeded demo data.
 
 ## Supabase Setup
 
-1. Create a project.
-2. Run `supabase/migrations/0001_init.sql`.
-3. Load `supabase/seed/seed.sql`.
-4. Create Auth users matching `profiles.email`.
-5. Create a Storage bucket `evidence` (private) and issue signed URLs from the client.
+1. Create a Supabase project.
+2. Run `supabase/migrations/0001_init.sql`, `0002_student_import_sync.sql`, then `0003_remove_generated_demo_records.sql`.
+3. Run `supabase/seed/seed.sql` to load the reference catalogue; it does not create student, faculty, or user records. Unverified programme durations, intakes, dean names, and HOD names are left blank.
+4. Create the first administrator in Supabase Auth. Insert a matching active row into `public.profiles` using that Auth user UUID and role `super_admin`. This one-time bootstrap is required because no account exists yet to authorize user creation.
+5. Deploy the secure account-provisioning function with the Supabase CLI: `supabase functions deploy create-portal-user`. Only active super/IQAC administrators can create users from **Administration → Users**. Passwords are set by the administrator and are never stored or logged by the portal.
+6. Configure the frontend environment variables and create a private Storage bucket named `evidence` if document storage is enabled.
+
+Confirmed student imports use the `commit_student_import` database function, which saves the student record and mapped academic, personal, contact, family, address, qualification, entrance-exam, mentor and custom attributes in one transaction. Sensitive identifiers remain in the restricted `student_sensitive` table. The portal loads records through `list_portal_students`, which enforces role-based visibility.
 
 ## Deployment
 

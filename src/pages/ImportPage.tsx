@@ -4,6 +4,8 @@ import { Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { Badge, Button, Card, PageHeader, Select } from '@/components/ui'
 import { canImport } from '@/lib/access'
+import { isSupabaseConfigured } from '@/lib/supabase'
+import { studentService } from '@/services/studentService'
 import { catalog, usePortalStore } from '@/store/portalStore'
 import { uid } from '@/lib/utils'
 import type { ImportJob, Student } from '@/types'
@@ -85,6 +87,8 @@ const IMPORT_FIELDS = [
   { id: 'address.present.country', label: 'Present Country', aliases: ['present country', 'current country', 'c country'] },
 ] as const
 
+const SORTED_IMPORT_FIELDS = [...IMPORT_FIELDS].sort((a, b) => a.label.localeCompare(b.label))
+
 type ImportFieldId = (typeof IMPORT_FIELDS)[number]['id'] | `custom:${string}`
 
 const FIELD_BY_ALIAS = new Map(
@@ -105,6 +109,16 @@ function normalizeImportValue(value: string) {
 
 function fieldForHeader(header: string): ImportFieldId {
   return FIELD_BY_ALIAS.get(normalizeImportValue(header)) ?? `custom:${header}`
+}
+
+function normalizeProgrammeName(value: string) {
+  return normalizeImportValue(value)
+    .replace(/\bb tech\b|\bbtech\b/g, 'bachelor of technology')
+    .replace(/\bb sc\b|\bbsc\b/g, 'bachelor of science')
+    .replace(/\bbca\b/g, 'bachelor of computer application')
+    .replace(/\bmca\b/g, 'master of computer applications')
+    .replace(/\bm sc\b|\bmsc\b/g, 'master of science')
+    .replace(/\bcyber security\b/g, 'cybersecurity')
 }
 
 function parseImportNumber(value: string): number | undefined {
@@ -142,15 +156,21 @@ function findProgrammeMatch(value: string) {
   const normalized = normalizeImportValue(value)
   if (!normalized) return null
 
+  const exactMatch = catalog.programmes.find((programme) =>
+    normalizeImportValue(programme.name) === normalized || normalizeImportValue(programme.code) === normalized,
+  )
+  if (exactMatch) return exactMatch
+
+  const target = normalizeProgrammeName(value)
   return catalog.programmes.find((programme) => {
     const aliases = [
-      normalizeImportValue(programme.name),
-      normalizeImportValue(programme.code),
-      normalizeImportValue(programme.name.replace(/\./g, ' ')),
-      normalizeImportValue(programme.code.replace(/[-_]/g, ' ')),
+      programme.name,
+      programme.name.replace(/\./g, ' '),
+      programme.code,
+      programme.code.replace(/[-_]/g, ' '),
     ]
 
-    return aliases.some((alias) => alias === normalized || alias.replace(/\s/g, '') === normalized.replace(/\s/g, ''))
+    return aliases.some((alias) => normalizeProgrammeName(alias) === target)
   })
 }
 
@@ -164,6 +184,7 @@ export function ImportPage() {
   const [headers, setHeaders] = useState<string[]>([])
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [sourceRows, setSourceRows] = useState<Record<string, unknown>[]>([])
+  const [saving, setSaving] = useState(false)
 
   if (!canImport(user.role)) {
     return <div><PageHeader title="Import Data" /><Card className="p-6 text-sm text-navy-600">Your role cannot import institutional data.</Card></div>
@@ -417,11 +438,27 @@ export function ImportPage() {
     return { errors, valid, warn, built, newCount, updatedCount, unchanged: job.totalRows - built.length - errors.filter((e) => e.severity === 'error').length }
   }, [job, mapping, sourceRows, students])
 
-  function confirm() {
+  async function confirm() {
     if (!job || !validated) return
-    commitImportStudents(validated.built, job.id)
-    toast.success(`${validated.built.length} student records saved in this portal`)
-    setJob({ ...job, status: 'committed' })
+    setSaving(true)
+    try {
+      let savedCounts: { created: number; updated: number } | undefined
+      if (isSupabaseConfigured) {
+        savedCounts = await studentService.commitImport(job.fileName, mapping, validated.built)
+      }
+      commitImportStudents(validated.built, job.id)
+      toast.success(
+        isSupabaseConfigured
+          ? `${savedCounts?.created ?? 0} new and ${savedCounts?.updated ?? 0} updated student records saved to Supabase and the portal`
+          : `${validated.built.length} student records saved in this browser`,
+      )
+      setJob({ ...job, status: 'committed' })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save the student import.'
+      toast.error(`Import was not saved: ${message}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   function downloadValidationReport() {
@@ -434,11 +471,14 @@ export function ImportPage() {
 
   return (
     <div>
-      <PageHeader title="Import Data" subtitle="Map Excel/CSV columns to student attributes. Unmatched columns are retained as custom attributes; critical errors are blocked." />
+      <PageHeader title="Import Data" subtitle="Confirmed student imports are saved to Supabase and synchronized with the portal. Unmatched columns are retained as custom attributes." />
       <Card className="p-5">
         <p className="text-sm font-medium">Upload Student Excel</p>
         <input className="mt-3 text-sm" type="file" accept=".xlsx,.xls,.csv" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
         <p className="mt-2 text-xs text-navy-400">Accepted: XLS, XLSX, CSV. Preview, validate, then confirm.</p>
+        {!isSupabaseConfigured ? (
+          <p className="mt-2 text-xs text-amber-700">Supabase is not configured. Imports are saved only in this browser and are not shared across users or devices.</p>
+        ) : null}
       </Card>
 
       {job && (
@@ -452,7 +492,7 @@ export function ImportPage() {
                 <span className="truncate text-navy-600">{h}</span>
                 <Select value={mapping[h] ?? ''} onChange={(e) => setMapping((m) => ({ ...m, [h]: e.target.value }))}>
                   <option value="">Ignore</option>
-                  {IMPORT_FIELDS.map((field) => (
+                  {SORTED_IMPORT_FIELDS.map((field) => (
                     <option key={field.id} value={field.id}>{field.label}</option>
                   ))}
                   <option value={`custom:${h}`}>Keep as custom attribute: {h}</option>
@@ -479,11 +519,13 @@ export function ImportPage() {
             ))}
           </div>
           <div className="mt-4 flex gap-2">
-            <Button variant="outline" onClick={() => setJob(null)}>Cancel Import</Button>
+            <Button variant="outline" disabled={saving} onClick={() => setJob(null)}>Cancel Import</Button>
             <Button variant="outline" disabled={!validated.errors.length} onClick={downloadValidationReport}>
               <Download size={16} /> Download Issues
             </Button>
-            <Button disabled={!validated.built.length} onClick={confirm}>Confirm Import</Button>
+            <Button disabled={!validated.built.length || saving} onClick={() => void confirm()}>
+              {saving ? 'Saving…' : 'Confirm Import'}
+            </Button>
           </div>
         </Card>
       )}

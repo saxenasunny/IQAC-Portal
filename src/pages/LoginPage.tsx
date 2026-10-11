@@ -1,25 +1,37 @@
 import { FormEvent, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { demoUsers } from '@/data/seed'
-import { ROLE_LABELS } from '@/lib/access'
+import { toast } from 'sonner'
+import { isSupabaseConfigured } from '@/lib/supabase'
+import { authService } from '@/services/authService'
 import { catalog, usePortalStore } from '@/store/portalStore'
 import { Button, Card, Input } from '@/components/ui'
 
 export function LoginPage() {
   const user = usePortalStore((s) => s.currentUser)
-  const login = usePortalStore((s) => s.login)
+  const setAuthenticatedUser = usePortalStore((s) => s.setAuthenticatedUser)
   const navigate = useNavigate()
-  const [email, setEmail] = useState('iqac.admin@apex.edu')
-  const [password, setPassword] = useState('Portal@2026')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
-  if (user) return <Navigate to="/" replace />
+  if (isSupabaseConfigured && user) return <Navigate to="/" replace />
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault()
-    const msg = login(email, password)
-    if (msg) setError(msg)
-    else navigate('/')
+    setError(null)
+    setSubmitting(true)
+    try {
+      if (!isSupabaseConfigured) throw new Error('Supabase is not configured. Configure Supabase Auth to sign in.')
+      setAuthenticatedUser(await authService.signIn(email, password))
+      navigate('/')
+    } catch (authError) {
+      const message = authError instanceof Error ? authError.message : 'Unable to sign in.'
+      setError(message)
+      toast.error(message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -53,29 +65,14 @@ export function LoginPage() {
               <Input className="mt-1" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
             </label>
             {error ? <p className="text-sm text-red-700">{error}</p> : null}
-            <Button type="submit" className="w-full">
+            <Button type="submit" className="w-full" disabled={submitting}>
               Login
             </Button>
+            {isSupabaseConfigured ? (
+              <p className="text-center text-xs text-navy-400">Use an active Supabase Auth account linked to a portal profile.</p>
+            ) : <p className="text-center text-xs text-amber-700">Connect Supabase to enable sign-in.</p>}
             <p className="text-center text-xs text-navy-400">Forgot password? Contact IQAC administration.</p>
           </form>
-          <div className="mt-6 border-t border-navy-100 pt-4">
-            <p className="mb-2 text-xs font-medium text-navy-500">Demo accounts (password: Portal@2026)</p>
-            <div className="grid max-h-48 grid-cols-1 gap-1 overflow-auto text-xs">
-              {demoUsers.map((u) => (
-                <button
-                  key={u.id}
-                  className="flex justify-between rounded px-2 py-1 text-left hover:bg-navy-50"
-                  onClick={() => {
-                    setEmail(u.email)
-                    setPassword(u.password)
-                  }}
-                >
-                  <span>{u.email}</span>
-                  <span className="text-navy-400">{ROLE_LABELS[u.role]}</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </Card>
       </div>
     </div>
