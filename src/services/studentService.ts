@@ -77,6 +77,10 @@ function mapStudent(value: unknown): Student {
   const customFields = Object.fromEntries(
     Object.entries(object(row.customFields)).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
   )
+  const additionalIdentifiers = Object.fromEntries(
+    Object.entries(object(sensitive.additionalIdentifiers))
+      .filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  )
 
   return {
     id: text(row.id),
@@ -159,6 +163,7 @@ function mapStudent(value: unknown): Student {
           bankAccount: text(sensitive.bankAccount) || undefined,
           ifsc: text(sensitive.ifsc) || undefined,
           abcId: text(sensitive.abcId) || undefined,
+          additionalIdentifiers,
         }
       : undefined,
     customFields,
@@ -176,8 +181,10 @@ function toImportRow(student: Student): Row {
   if (!programme || !department || !school) {
     throw new Error(`Cannot save ${student.registrationId}: its programme, department, or school is missing from the portal catalogue.`)
   }
+  const { additionalIdentifiers: _additionalIdentifiers, ...sensitive } = student.sensitive ?? {}
   return {
     ...student,
+    sensitive,
     programmeCode: programme.code,
     departmentCode: department.code,
     schoolCode: school.code,
@@ -206,6 +213,12 @@ export const studentService = {
       p_file_name: fileName,
       p_mapping: mapping,
       p_rows: students.map(toImportRow),
+      p_sensitive_rows: students.flatMap((student) => {
+        const identifiers = student.sensitive?.additionalIdentifiers ?? {}
+        return Object.keys(identifiers).length
+          ? [{ registrationId: student.registrationId, identifiers }]
+          : []
+      }),
     })
     if (error) throw error
     const result = object(data)

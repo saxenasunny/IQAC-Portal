@@ -381,7 +381,8 @@ create table if not exists public.student_sensitive (
   ifsc text,
   bank_name text,
   bank_branch text,
-  abc_id text
+  abc_id text,
+  additional_identifiers jsonb not null default '{}'::jsonb
 );
 
 create table if not exists public.student_status_history (

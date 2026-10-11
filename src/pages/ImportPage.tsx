@@ -47,7 +47,7 @@ const IMPORT_FIELDS = [
   { id: 'academic.percentage', label: 'Percentage', aliases: ['percentage', 'aggregate percentage', 'overall percentage'] },
   { id: 'academic.backlogs', label: 'Backlogs', aliases: ['backlogs', 'backlog count'] },
   { id: 'academic.admissionDate', label: 'Date of Joining / Admission', aliases: ['date of joining', 'date of admission', 'joining date', 'admission date'] },
-  { id: 'academic.expectedGraduation', label: 'Expected Graduation', aliases: ['expected graduation', 'year of graduation', 'graduation year'] },
+  { id: 'academic.expectedGraduation', label: 'Expected Graduation', aliases: ['expected graduation', 'expected graduation date'] },
   { id: 'contact.personalEmail', label: 'Personal Email', aliases: ['personal email', 'alternate email', 'email id personal'] },
   { id: 'contact.alternatePhone', label: 'Alternate Phone', aliases: ['alternate phone', 'alternate mobile', 'personal mobile', 'alternate mobile number'] },
   { id: 'contact.emergencyContactName', label: 'Emergency Contact Name', aliases: ['emergency contact name', 'emergency contact'] },
@@ -87,7 +87,78 @@ const IMPORT_FIELDS = [
   { id: 'address.present.country', label: 'Present Country', aliases: ['present country', 'current country', 'c country'] },
 ] as const
 
-const SORTED_IMPORT_FIELDS = [...IMPORT_FIELDS].sort((a, b) => a.label.localeCompare(b.label))
+const EXACT_STUDENT_COLUMNS = [
+  'Registration Id', 'Application Number', 'Name', 'Email', 'Phone Number', 'Department',
+  'Programme', 'Batch Year', 'Gender', 'Quota', 'Academic Status', 'Current Year',
+  'Specialisation', 'Accommodation Type', 'Date of Joining', 'Account Status', 'Joining Year',
+  'Expected Graduation Year', 'Expected Graduation Date', 'Intake', 'Programme Section',
+  'current Term', 'Programme System', 'Admission Type', 'Activation/Deactivation Reason',
+  'Student Status', 'Student Status Remark', 'Specialization', 'School',
+  'Will you require hostel accommodation?', 'How did you come to know about GD Goenka University?',
+  'If Newspaper, select one of the following:', 'Will you require transportation?',
+  'Meritto Application Number', 'Title', 'Age as on 31st December 2025', 'Nationality',
+  'Academic Bank of Credits (ABC) ID', 'Name as per Aadhar Card', 'Blood-Group', 'First name',
+  'Middle name', 'Last name', 'Name as on certificate', 'Date of birth', 'Citizenship',
+  'Nationality If Other', 'Blood Group if Other', "Father's Alternate Mobile Number",
+  "Father's Email Address", "Father's first name", "Father's middle name", "Father's last name",
+  "Father's phone", "Father's email", "Father's address", "Father's occupation",
+  "Father's annual income", "Father's PAN", "Father's aadhar number", "Father's Name",
+  "Mother's Email Address", "Mother's Alternate Mobile Number", "Mother's first name",
+  "Mother's middle name", "Mother's last name", "Mother's phone", "Mother's email",
+  "Mother's address", "Mother's occupation", "Mother's annual income", "Mother's PAN",
+  "Mother's aadhar number", "Mother's Name", "GUARDIAN's Alternate Mobile Number",
+  "Guardian's Designation", "Guardian's first name", "Guardian's last name", "Guardian's phone",
+  "Guardian's email", "Guardian's address", "Guardian's occupation", "Guardian's annual income",
+  "Guardian's PAN", "Guardian's aadhar number", "Guardian's gender", 'PAN card number',
+  'Aadhar card number (Passport Number for Foreign National Students)', 'Place of Issue',
+  'Passport number', 'Passport issued date', 'Passport expiry date', 'Passport Country',
+  'State', 'Address Line 2', 'P Address Line 1', 'P Address Line 2', 'P Pincode', 'P District',
+  'C Address Line 1', 'C Address Line 2', 'C Pincode', 'C District',
+  'Is permanent address same as address for communication?', 'P City', 'C City', 'C State',
+  'C Country', 'Country', 'Emergency contact number', 'Email id', 'Permanent city',
+  'Alternate email id', 'Phone number', 'Alternate phone number', 'Present address',
+  'Present city', 'Present district', 'Present state', 'Present postcode', 'Permanent address',
+  'Presently residing with', 'Permanent district', 'Permanent state', 'Permanent postcode',
+  'Communication address', 'Communication city', 'Communication district',
+  'Communication state', 'Communication Country', 'Permanent Country',
+  "Local guardian's name", "Local guardian's contact number", "Local guardian's email id",
+  "Local guardian's occupation", "Local guardian's annual income",
+  'Have you appear in any entrance exam?', 'Please check the Entrance Exams Appeared',
+  'Entrance exam enrollment number', 'Entrance exam rank', 'JEE rank', 'JEE roll number',
+  'CET rank', 'CET roll number', 'NATA rank', 'NATA roll number', 'CLAT rank', 'CLAT roll number',
+  'Visa number', 'Visa issued date', 'Visa expiry date', 'RC/RP issued date', 'RC/RP expiry date',
+  'Bank A/C number', 'Account holder name', 'IFSC Code', 'Branch', 'Bank name',
+  'Sponsorer name', 'Relation with sponsorer', 'Sponsorer address', 'Sponsorer city',
+  'Sponsorer district', 'Sponsorer state', 'Sponsorer country', 'Sponsorer postcode',
+  'Post Graduation Stream', '12th Name of Board/ University', 'ABC ID', 'Graduation State',
+  'Graduation University', 'Graduation Institute', 'UG-Obtained Percentage / CGPA',
+  'Post Graduation State', 'Post Graduation University', 'Post Graduation Institute',
+  'PG-Obtained Percentage / CGPA', 'Graduation Degree Name', 'Graduation Year of Passing',
+  'Post Graduation Degree Name', 'Diploma Stream', 'PG-Year of Passing',
+  'Other Qualification-Degree', 'Other Qualification-Stream', 'Other Qualification-Result Status',
+  'Other Qualification-Year of Passing', 'Other Qualification-Obtained Percentage / CGPA',
+  '12th Stream', 'Marking Scheme-10th', 'Marking Scheme-12th', 'Marking Scheme-Diploma',
+  'Marking Scheme-UG', 'Marking Scheme-PG', 'Marking Scheme-Other',
+  'Diploma-School/Institute Name', 'Graduation Stream', 'H.S.C (12th) Exam Cgpa',
+  'S.S.C (10th) Exam Cgpa', '10th-Obtained Percentage / CGPA', 'Post Graduate (PG) Marks',
+  'S.S.C (10th) exam marks', 'H.S.C (12th) exam marks', 'Diploma marks',
+  'Under graduate marks', 'University roll number', 'Post Graduate (PG) Year Of Passing',
+  'S.S.C (10th) Exam Year Of Passing', '12th-Obtained Percentage / CGPA',
+  'H.S.C (12th) Exam Year Of Passing', 'Diploma-Obtained Percentage / CGPA',
+  'Diploma (Deg) Year of Passing', 'Under Graduate (UG) Percentage',
+  'Under Graduate (UG) Year Of Passing', 'Number of Active Backlogs',
+  'Number of Cleared Backlogs', 'Number of Year Backs', 'Post Graduate (PG) Percentage',
+  'University / Board Name', 'Total Work Experience (In Years)', 'Under Graduate (UG) Cgpa',
+  'Post Graduate (PG) Cgpa', 'Industry', 'Are you Differently Abled?',
+  'Do you belong to EWS category?', 'Are you kashmiri migrant?',
+  'Reservation Category', 'Family ID, if resident of Haryana',
+  "Are you 1st generation child (Whose parent's are not a Graduate)",
+  'Are you a Haryana Domicile Student?', 'Religion Name', 'Caste', 'Sub caste', 'Religion',
+  'State of domicile', 'Name Of Organisation', 'Industry Type', 'Function', 'Designation',
+  'Gross Annual Salary', 'Start Date', 'End Date', 'Responsibilities And Functions',
+  'Total Experience(In Months)', 'Mentor Name', 'Mentor Email', 'Mentor Phone',
+  'Applicant name', 'Parent name', 'Date',
+] as const
 
 type ImportFieldId = (typeof IMPORT_FIELDS)[number]['id'] | `custom:${string}`
 
@@ -95,6 +166,18 @@ const FIELD_BY_ALIAS = new Map(
   IMPORT_FIELDS.flatMap((field) =>
     [field.label, ...field.aliases].map((alias) => [normalizeImportValue(alias), field.id] as const),
   ),
+)
+
+const EXACT_COLUMN_IMPORT_FIELDS = [...new Set(EXACT_STUDENT_COLUMNS)]
+  .map((label) => ({
+    id: FIELD_BY_ALIAS.get(normalizeImportValue(label)) ?? `custom:${label}`,
+    label,
+  }))
+  .filter((exact) => !IMPORT_FIELDS.some((field) => field.id === exact.id && field.label === exact.label))
+const SORTED_IMPORT_FIELDS = [...IMPORT_FIELDS, ...EXACT_COLUMN_IMPORT_FIELDS]
+  .sort((a, b) => a.label.localeCompare(b.label))
+const EXACT_COLUMN_BY_NORMALIZED = new Map(
+  EXACT_STUDENT_COLUMNS.map((label) => [normalizeImportValue(label), label] as const),
 )
 
 function normalizeImportValue(value: string) {
@@ -108,7 +191,15 @@ function normalizeImportValue(value: string) {
 }
 
 function fieldForHeader(header: string): ImportFieldId {
-  return FIELD_BY_ALIAS.get(normalizeImportValue(header)) ?? `custom:${header}`
+  const normalized = normalizeImportValue(header)
+  return FIELD_BY_ALIAS.get(normalized)
+    ?? (EXACT_COLUMN_BY_NORMALIZED.get(normalized)
+      ? `custom:${EXACT_COLUMN_BY_NORMALIZED.get(normalized)!}`
+      : `custom:${header}`)
+}
+
+function isSensitiveImportAttribute(label: string): boolean {
+  return /\b(aadhaar|aadhar|pan|passport|visa|ifsc|abc id|bank|account holder)\b/i.test(label)
 }
 
 function normalizeProgrammeName(value: string) {
@@ -319,11 +410,15 @@ export function ImportPage() {
       const academicYearValue = normalizeImportValue(get('academicYear'))
       const academicYear = catalog.academicYears.find((item) => normalizeImportValue(item.label) === academicYearValue)
         ?? catalog.academicYears.find((item) => academicYearValue && normalizeImportValue(item.label).startsWith(academicYearValue.slice(0, 4)))
+      const mappedCustomFields = Object.entries(mapping)
+        .filter(([, field]) => field.startsWith('custom:'))
+        .map(([column, field]) => [field.slice('custom:'.length) || column, String(row[column] ?? '').trim()] as const)
+        .filter(([, value]) => value)
       const customFields = Object.fromEntries(
-        Object.entries(mapping)
-          .filter(([, field]) => field.startsWith('custom:'))
-          .map(([column, field]) => [field.slice('custom:'.length) || column, String(row[column] ?? '').trim()])
-          .filter(([, value]) => value),
+        mappedCustomFields.filter(([label]) => !isSensitiveImportAttribute(label)),
+      )
+      const additionalIdentifiers = Object.fromEntries(
+        mappedCustomFields.filter(([label]) => isSensitiveImportAttribute(label)),
       )
       const qualification = {
         level: get('qualification.level'),
@@ -356,6 +451,10 @@ export function ImportPage() {
         bankAccount: get('sensitive.bankAccount') || existingStudent?.sensitive?.bankAccount,
         ifsc: get('sensitive.ifsc') || existingStudent?.sensitive?.ifsc,
         abcId: get('sensitive.abcId') || existingStudent?.sensitive?.abcId,
+        additionalIdentifiers: {
+          ...existingStudent?.sensitive?.additionalIdentifiers,
+          ...additionalIdentifiers,
+        },
       }
       built.push({
         id: uid('stu'),

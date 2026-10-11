@@ -186,11 +186,8 @@ begin
     if exists (
       select 1
       from jsonb_each_text(coalesce(v_row->'customFields', '{}'::jsonb)) as custom(field_name, field_value)
-      where regexp_replace(lower(custom.field_name), '[^a-z0-9]', '', 'g') = any(array[
-        'aadhaar', 'aadhar', 'aadhaarnumber', 'aadharnumber', 'pan', 'pannumber',
-        'bankaccount', 'bankaccountnumber', 'ifsc', 'ifsccode', 'abcid',
-        'academicbankofcreditsid'
-      ])
+      where regexp_replace(lower(custom.field_name), '[^a-z0-9]', '', 'g')
+        ~ '(aadhaar|aadhar|pan|passport|visa|ifsc|abcid|bank|accountholder)'
         and nullif(btrim(custom.field_value), '') is not null
     ) then
       raise exception 'Sensitive identifiers must use the protected attribute mappings, not custom fields.';

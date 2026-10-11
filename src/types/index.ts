@@ -199,7 +199,14 @@ export interface Student {
     year: number
   }>
   mentor?: { name: string; email: string; phone: string }
-  sensitive?: { aadhaar?: string; pan?: string; bankAccount?: string; ifsc?: string; abcId?: string }
+  sensitive?: {
+    aadhaar?: string
+    pan?: string
+    bankAccount?: string
+    ifsc?: string
+    abcId?: string
+    additionalIdentifiers?: Record<string, string>
+  }
   customFields?: Record<string, string>
   createdAt: string
   updatedAt: string

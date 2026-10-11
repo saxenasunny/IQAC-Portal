@@ -104,6 +104,9 @@ export function StudentProfilePage() {
                 <Item label="Aadhaar" value={maskSensitive(student.sensitive?.aadhaar)} />
                 <Item label="PAN" value={maskSensitive(student.sensitive?.pan)} />
                 <Item label="ABC ID" value={student.sensitive?.abcId ?? '—'} />
+                {Object.entries(student.sensitive?.additionalIdentifiers ?? {}).map(([label, value]) => (
+                  <Item key={label} label={label} value={maskSensitive(value)} />
+                ))}
               </>
             ) : (
               <p className="sm:col-span-2 text-navy-500">Sensitive identifiers are restricted for your role.</p>
