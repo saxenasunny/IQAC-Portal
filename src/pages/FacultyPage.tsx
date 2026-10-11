@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Badge, Button, Card, EmptyState, Input, Modal, PageHeader, Select, statusTone } from '@/components/ui'
-import { canWriteData } from '@/lib/access'
+import { canImport, canWriteData } from '@/lib/access'
 import { departmentName, schoolName, visibleFaculty } from '@/lib/lookups'
 import { downloadBlob, toCsv, uid } from '@/lib/utils'
 import { catalog, usePortalStore } from '@/store/portalStore'
@@ -32,6 +32,7 @@ export function FacultyPage() {
         actions={
           <>
             <Button variant="outline" onClick={() => downloadBlob('faculty.csv', toCsv(filtered.map((f) => ({ employeeId: f.employeeId, name: f.fullName, department: departmentName(f.departmentId), designation: f.designation, qualification: f.highestQualification }))))}>Export</Button>
+            {canImport(user.role) ? <Button variant="outline" onClick={() => navigate('/data/import/faculty')}>Import Faculty</Button> : null}
             {canWriteData(user.role) ? <Button onClick={() => setOpen(true)}>Add Faculty</Button> : null}
           </>
         }

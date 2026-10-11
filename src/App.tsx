@@ -8,6 +8,7 @@ import { StudentProfilePage } from '@/pages/StudentProfilePage'
 import { FacultyPage, FacultyProfilePage } from '@/pages/FacultyPage'
 import { CampusesPage, DepartmentsPage, InstitutionProfilePage, ProgrammesPage, SchoolsPage } from '@/pages/InstitutionPages'
 import { ImportPage } from '@/pages/ImportPage'
+import { FacultyImportPage } from '@/pages/FacultyImportPage'
 import { ConfigurationPage, DataHistoryPage, DataQualityPage, DataValidationPage, NotificationsPage } from '@/pages/DataPages'
 import { AccreditationDashboardPage, RequirementDetailPage } from '@/pages/AccreditationPages'
 import { DocumentDetailPage, DocumentsPage } from '@/pages/DocumentsPage'
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/faculty/:id" element={<FacultyProfilePage />} />
           <Route path="/staff" element={<StaffPage />} />
           <Route path="/data/import" element={<ImportPage />} />
+          <Route path="/data/import/faculty" element={<FacultyImportPage />} />
           <Route path="/data/validation" element={<DataValidationPage />} />
           <Route path="/data/quality" element={<DataQualityPage />} />
           <Route path="/data/history" element={<DataHistoryPage />} />

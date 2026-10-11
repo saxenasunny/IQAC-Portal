@@ -7,7 +7,7 @@ Institution-level portal for GD Goenka University's Internal Quality Assurance C
 - Role-based access (Super Admin, IQAC, Registrar, Dean, HOD, Faculty, Data Entry, Verifier, Auditor)
 - Normalized student and faculty databases (sensitive fields isolated and masked)
 - Schools, departments, programmes, batches, including the School of Engineering & Sciences department and its offered programme catalogue
-- Excel/CSV student import with mapping for core, academic, personal and contact fields, validation, preview, and retained custom attributes
+- Excel/CSV student and faculty imports with column mapping, validation, and preview; student imports also retain custom attributes
 - Document repository with versioning and many-to-many evidence links
 - Generic accreditation framework engine (not hard-coded to NAAC)
 - Configurable metric formulas with data lineage
@@ -63,13 +63,15 @@ These are public browser settings: the Supabase project URL and anon/publishable
 ## Supabase Setup
 
 1. Create a Supabase project.
-2. Run `supabase/migrations/0001_init.sql`, `0002_student_import_sync.sql`, `0003_remove_generated_demo_records.sql`, `0004_extended_student_import_attributes.sql`, `0005_normalize_student_import_identifiers.sql`, then `0006_optimize_student_import_lookup.sql`. These scripts are safe to rerun: existing schema objects are retained, the named policies are refreshed, and the cleanup only removes known generated rows or values that still exactly match the old generated seed.
+2. Run `supabase/migrations/0001_init.sql`, `0002_student_import_sync.sql`, `0003_remove_generated_demo_records.sql`, `0004_extended_student_import_attributes.sql`, `0005_normalize_student_import_identifiers.sql`, `0006_optimize_student_import_lookup.sql`, `0007_rename_institution_gd_goenka.sql`, and `0008_faculty_import_sync.sql`. These scripts are safe to rerun: existing schema objects are retained, the named policies are refreshed, and the cleanup only removes known generated rows or values that still exactly match the old generated seed.
 3. Run `supabase/seed/seed.sql` to add missing reference catalogue rows. Existing rows are left unchanged; it does not create student, faculty, or user records. Unverified programme durations, intakes, dean names, and HOD names are left blank.
 4. Create the first administrator in Supabase Auth. Insert a matching active row into `public.profiles` using that Auth user UUID and role `super_admin`. This one-time bootstrap is required because no account exists yet to authorize user creation.
 5. Deploy the secure account-provisioning function with the Supabase CLI: `supabase functions deploy create-portal-user`. Only active super/IQAC administrators can create users from **Administration → Users**. Passwords are set by the administrator and are never stored or logged by the portal.
 6. Configure the frontend environment variables and create a private Storage bucket named `evidence` if document storage is enabled.
 
 Confirmed student imports are sent to Supabase in batches of 10 rows to stay within request timeouts. Each batch uses the `commit_student_import` database function to save the student record and mapped academic, personal, contact, family, address, qualification, entrance-exam, mentor and custom attributes in one transaction. If a later batch fails, earlier batches remain saved and the error reports that partial progress; retrying is safe because rows are matched by Registration ID. Other supplied Excel columns are retained as named custom attributes in `student_portal_data`. Sensitive identifiers remain in the restricted `student_sensitive` table; extended identifiers are accepted only for super/IQAC administrators. The portal loads records through `list_portal_students`, which enforces role-based visibility. When Supabase is configured, student records are loaded from Supabase and are not duplicated in browser local storage.
+
+Faculty imports are available from **Faculty → Import Faculty**. The importer accepts XLS, XLSX and CSV files, supports column mapping and validation, previews valid rows, and matches existing records by Employee ID. Confirmed rows are sent to Supabase in batches of 25 through the role-checked `commit_faculty_import` function; the function resolves catalogue department and school codes and writes faculty records transactionally. Apply `0008_faculty_import_sync.sql` before using this feature.
 
 ## Deployment
 

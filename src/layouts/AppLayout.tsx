@@ -52,6 +52,7 @@ const NAV: NavGroup[] = [
     icon: FolderOpen,
     items: [
       { to: '/data/import', label: 'Import Data' },
+      { to: '/data/import/faculty', label: 'Import Faculty' },
       { to: '/data/validation', label: 'Data Validation' },
       { to: '/data/quality', label: 'Data Quality' },
       { to: '/data/history', label: 'Data Change History' },

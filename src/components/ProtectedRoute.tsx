@@ -5,12 +5,14 @@ import { Button, Card } from '@/components/ui'
 import { isSupabaseConfigured, supabase } from '@/lib/supabase'
 import { authService } from '@/services/authService'
 import { studentService } from '@/services/studentService'
+import { facultyService } from '@/services/facultyService'
 import { usePortalStore } from '@/store/portalStore'
 
 export function ProtectedRoute() {
   const user = usePortalStore((s) => s.currentUser)
   const setAuthenticatedUser = usePortalStore((s) => s.setAuthenticatedUser)
   const setStudents = usePortalStore((s) => s.setStudents)
+  const setFaculty = usePortalStore((s) => s.setFaculty)
   const [ready, setReady] = useState(!isSupabaseConfigured)
   const [loadError, setLoadError] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -33,15 +35,19 @@ export function ProtectedRoute() {
           return
         }
         const profile = await authService.profileForUser(data.session.user.id)
-        const students = await studentService.listPortal()
+        const [students, faculty] = await Promise.all([
+          studentService.listPortal(),
+          facultyService.list(),
+        ])
         if (!cancelled) {
           setAuthenticatedUser(profile)
           setStudents(students)
+          setFaculty(faculty)
           setReady(true)
         }
       } catch (error) {
         if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : 'Unable to load your Supabase account and student data.')
+          setLoadError(error instanceof Error ? error.message : 'Unable to load your Supabase account, student data, and faculty data.')
           setReady(true)
         }
       }
@@ -51,7 +57,7 @@ export function ProtectedRoute() {
     return () => {
       cancelled = true
     }
-  }, [attempt, setAuthenticatedUser, setStudents])
+  }, [attempt, setAuthenticatedUser, setFaculty, setStudents])
 
   if (!ready) return <Card className="m-6 p-6 text-sm text-navy-600">Connecting to Supabase…</Card>
   if (!isSupabaseConfigured) return <Navigate to="/login" replace />

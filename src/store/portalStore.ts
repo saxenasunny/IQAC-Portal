@@ -40,6 +40,7 @@ interface PortalState {
   imports: ImportJob[]
   setAuthenticatedUser: (user: Profile | null) => void
   setStudents: (students: Student[]) => void
+  setFaculty: (faculty: Faculty[]) => void
   logout: () => void
   upsertStudent: (student: Student, reason?: string) => void
   archiveStudent: (id: string) => void
@@ -51,8 +52,10 @@ interface PortalState {
   addTask: (task: FrameworkTask) => void
   addImport: (job: ImportJob) => void
   mergeImportedStudents: (rows: Student[]) => void
+  mergeImportedFaculty: (rows: Faculty[]) => void
   setImportStatus: (jobId: string, status: ImportJob['status']) => void
   commitImportStudents: (rows: Student[], jobId: string) => void
+  commitImportFaculty: (rows: Faculty[], jobId: string) => void
   markNotificationRead: (id: string) => void
   addAudit: (log: Omit<AuditLog, 'id' | 'createdAt' | 'actorName' | 'actorRole' | 'ipAddress'> & Partial<Pick<AuditLog, 'actorName' | 'ipAddress'>>) => void
   refreshComputed: () => void
@@ -82,6 +85,10 @@ export const usePortalStore = create<PortalState>()(
       setAuthenticatedUser: (user) => set({ currentUser: user }),
       setStudents: (students) => {
         set({ students })
+        get().refreshComputed()
+      },
+      setFaculty: (faculty) => {
+        set({ faculty })
         get().refreshComputed()
       },
       logout: () => {
@@ -182,6 +189,18 @@ export const usePortalStore = create<PortalState>()(
         set({ students: [...studentsByRegistration.values()] })
         get().refreshComputed()
       },
+      mergeImportedFaculty: (rows) => {
+        const facultyByEmployeeId = new Map(
+          get().faculty.map((member) => [member.employeeId.toLowerCase(), member]),
+        )
+        rows.forEach((row) => {
+          const key = row.employeeId.toLowerCase()
+          const existing = facultyByEmployeeId.get(key)
+          facultyByEmployeeId.set(key, existing ? { ...existing, ...row, id: existing.id } : row)
+        })
+        set({ faculty: [...facultyByEmployeeId.values()] })
+        get().refreshComputed()
+      },
       setImportStatus: (jobId, status) => {
         set({
           imports: get().imports.map((job) => job.id === jobId ? { ...job, status } : job),
@@ -212,6 +231,35 @@ export const usePortalStore = create<PortalState>()(
           ),
         })
         get().addAudit({ action: 'Committed student import', entity: 'Import', entityId: jobId, newValue: `${created} new, ${updated} updated` })
+        get().refreshComputed()
+      },
+      commitImportFaculty: (rows, jobId) => {
+        const existingByEmployeeId = new Map(
+          get().faculty.map((member) => [member.employeeId.toLowerCase(), member]),
+        )
+        const next = [...get().faculty]
+        let created = 0
+        let updated = 0
+        for (const row of rows) {
+          const existing = existingByEmployeeId.get(row.employeeId.toLowerCase())
+          if (existing) {
+            const index = next.findIndex((member) => member.id === existing.id)
+            next[index] = { ...existing, ...row, id: existing.id, updatedAt: new Date().toISOString() }
+            updated += 1
+          } else {
+            next.unshift(row)
+            created += 1
+          }
+        }
+        set({
+          faculty: next,
+          imports: get().imports.map((job) =>
+            job.id === jobId
+              ? { ...job, status: 'committed', newCount: created, updatedCount: updated, validRows: rows.length }
+              : job,
+          ),
+        })
+        get().addAudit({ action: 'Committed faculty import', entity: 'Import', entityId: jobId, newValue: `${created} new, ${updated} updated` })
         get().refreshComputed()
       },
       markNotificationRead: (id) =>
