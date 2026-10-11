@@ -24,6 +24,7 @@ import type {
   Profile,
   Student,
 } from '@/types'
+import { isSupabaseConfigured } from '@/lib/supabase'
 import { uid } from '@/lib/utils'
 import { evaluateRequirementFormula } from '@/lib/formulas'
 
@@ -236,14 +237,18 @@ export const usePortalStore = create<PortalState>()(
     }),
     {
       name: 'iqac-portal-v1',
-      version: 1,
+      version: 2,
+      partialize: (state) => ({
+        ...state,
+        students: isSupabaseConfigured ? [] : state.students,
+      }),
       migrate: (persistedState) => {
         const persisted = persistedState as Partial<PortalState> & { users?: unknown }
         const { users: _legacyUsers, ...state } = persisted
         return {
           ...state,
           currentUser: state.currentUser?.id.startsWith('usr_') ? null : state.currentUser ?? null,
-          students: (state.students ?? []).filter((student) => !/^stu_\d+$/.test(student.id)),
+          students: (isSupabaseConfigured ? [] : state.students ?? []).filter((student) => !/^stu_\d+$/.test(student.id)),
           faculty: (state.faculty ?? []).filter((member) => !/^fac_\d+$/.test(member.id)),
           documents: (state.documents ?? []).filter((document) =>
             !['doc_ar', 'doc_ssr', 'doc_phd', 'doc_infra', 'doc_pol', 'doc_green', 'doc_nba', 'doc_int'].includes(document.id),
