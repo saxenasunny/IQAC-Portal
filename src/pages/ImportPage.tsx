@@ -276,6 +276,7 @@ export function ImportPage() {
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [sourceRows, setSourceRows] = useState<Record<string, unknown>[]>([])
   const [saving, setSaving] = useState(false)
+  const [importCompleted, setImportCompleted] = useState(false)
 
   if (!canImport(user.role)) {
     return <div><PageHeader title="Import Data" /><Card className="p-6 text-sm text-navy-600">Your role cannot import institutional data.</Card></div>
@@ -316,6 +317,7 @@ export function ImportPage() {
       setSourceRows(json)
       setMapping(auto)
       setJob(created)
+      setImportCompleted(false)
       addImport(created)
       toast.success(`Detected ${json.length} rows and ${cols.length} columns`)
     }
@@ -537,21 +539,45 @@ export function ImportPage() {
     return { errors, valid, warn, built, newCount, updatedCount, unchanged: job.totalRows - built.length - errors.filter((e) => e.severity === 'error').length }
   }, [job, mapping, sourceRows, students])
 
+  const skippedRows = useMemo(() => {
+    if (!validated) return []
+    const rowErrors = new Map<number, string[]>()
+    validated.errors
+      .filter((issue) => issue.severity === 'error')
+      .forEach((issue) => {
+        const messages = rowErrors.get(issue.row) ?? []
+        messages.push(`${issue.field}: ${issue.message}`)
+        rowErrors.set(issue.row, messages)
+      })
+    return [...rowErrors.entries()]
+      .sort(([first], [second]) => first - second)
+      .map(([rowNumber, messages]) => ({
+        'Row Number': rowNumber,
+        ...Object.fromEntries(
+          headers.map((header) => [header, String(sourceRows[rowNumber - 2]?.[header] ?? '')]),
+        ),
+        'Import Errors': [...new Set(messages)].join(' | '),
+      }))
+  }, [headers, sourceRows, validated])
+
   async function confirm() {
     if (!job || !validated) return
     setSaving(true)
     try {
       let savedCounts: { created: number; updated: number } | undefined
-      if (isSupabaseConfigured) {
+      if (isSupabaseConfigured && validated.built.length) {
         savedCounts = await studentService.commitImport(job.fileName, mapping, validated.built)
       }
       commitImportStudents(validated.built, job.id)
-      toast.success(
-        isSupabaseConfigured
-          ? `${savedCounts?.created ?? 0} new and ${savedCounts?.updated ?? 0} updated student records saved to Supabase and the portal`
-          : `${validated.built.length} student records saved in this browser`,
-      )
+      if (!validated.built.length) {
+        toast.success(`Import completed. No rows were saved; ${skippedRows.length} invalid rows were skipped.`)
+      } else if (isSupabaseConfigured) {
+        toast.success(`${savedCounts?.created ?? 0} new and ${savedCounts?.updated ?? 0} updated student records saved to Supabase and the portal`)
+      } else {
+        toast.success(`${validated.built.length} student records saved in this browser`)
+      }
       setJob({ ...job, status: 'committed' })
+      setImportCompleted(true)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save the student import.'
       toast.error(`Import was not saved: ${message}`)
@@ -566,6 +592,14 @@ export function ImportPage() {
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Validation issues')
     XLSX.writeFile(workbook, `${job.fileName.replace(/\.[^.]+$/, '')}-validation-report.xlsx`)
+  }
+
+  function downloadSkippedRowsReport() {
+    if (!job || !skippedRows.length) return
+    const worksheet = XLSX.utils.json_to_sheet(skippedRows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Skipped student rows')
+    XLSX.writeFile(workbook, `${job.fileName.replace(/\.[^.]+$/, '')}-skipped-rows-report.xlsx`)
   }
 
   return (
@@ -610,6 +644,18 @@ export function ImportPage() {
             <Stat label="Errors" value={validated.errors.filter((e) => e.severity === 'error').length} />
             <Stat label="New / Updated" value={`${validated.newCount} / ${validated.updatedCount}`} />
           </div>
+          {importCompleted ? (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-medium text-amber-900">
+                Import completed: {validated.built.length} valid rows processed and {skippedRows.length} rows with errors skipped.
+              </p>
+              {skippedRows.length ? (
+                <Button className="mt-3" variant="outline" onClick={downloadSkippedRowsReport}>
+                  <Download size={16} /> Download Skipped Rows Report
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           <div className="mt-4 max-h-56 overflow-auto text-xs">
             {validated.errors.slice(0, 40).map((e, i) => (
               <p key={i} className={e.severity === 'error' ? 'text-red-700' : 'text-amber-700'}>
@@ -618,12 +664,14 @@ export function ImportPage() {
             ))}
           </div>
           <div className="mt-4 flex gap-2">
-            <Button variant="outline" disabled={saving} onClick={() => setJob(null)}>Cancel Import</Button>
+            {!importCompleted ? (
+              <Button variant="outline" disabled={saving} onClick={() => setJob(null)}>Cancel Import</Button>
+            ) : null}
             <Button variant="outline" disabled={!validated.errors.length} onClick={downloadValidationReport}>
               <Download size={16} /> Download Issues
             </Button>
-            <Button disabled={!validated.built.length || saving} onClick={() => void confirm()}>
-              {saving ? 'Saving…' : 'Confirm Import'}
+            <Button disabled={(!validated.built.length && !skippedRows.length) || saving || importCompleted} onClick={() => void confirm()}>
+              {saving ? 'Saving…' : importCompleted ? 'Import Completed' : 'Confirm Import'}
             </Button>
           </div>
         </Card>
