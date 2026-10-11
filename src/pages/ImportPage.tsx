@@ -243,6 +243,19 @@ function parseImportDate(value: string): string {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10)
 }
 
+function importErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object') {
+    const details = error as Record<string, unknown>
+    const message = typeof details.message === 'string' ? details.message : ''
+    const code = typeof details.code === 'string' ? ` (${details.code})` : ''
+    const detail = typeof details.details === 'string' ? ` Details: ${details.details}` : ''
+    const hint = typeof details.hint === 'string' ? ` Hint: ${details.hint}` : ''
+    if (message) return `${message}${code}${detail}${hint}`
+  }
+  return 'Supabase returned an unrecognized error. Check the browser console and Supabase logs.'
+}
+
 function findProgrammeMatch(value: string) {
   const normalized = normalizeImportValue(value)
   if (!normalized) return null
@@ -579,7 +592,7 @@ export function ImportPage() {
       setJob({ ...job, status: 'committed' })
       setImportCompleted(true)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save the student import.'
+      const message = importErrorMessage(error)
       toast.error(`Import was not saved: ${message}`)
     } finally {
       setSaving(false)
