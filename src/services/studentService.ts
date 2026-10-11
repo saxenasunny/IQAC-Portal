@@ -209,17 +209,24 @@ export const studentService = {
 
   async commitImport(fileName: string, mapping: Record<string, string>, students: Student[]) {
     if (!supabase) throw new Error('Supabase is not configured.')
-    const { data, error } = await supabase.rpc('commit_student_import', {
+    const rows = students.map(toImportRow)
+    const sensitiveRows = students.flatMap((student) => {
+      const identifiers = student.sensitive?.additionalIdentifiers ?? {}
+      return Object.keys(identifiers).length
+        ? [{ registrationId: student.registrationId, identifiers }]
+        : []
+    })
+    const params = {
       p_file_name: fileName,
       p_mapping: mapping,
-      p_rows: students.map(toImportRow),
-      p_sensitive_rows: students.flatMap((student) => {
-        const identifiers = student.sensitive?.additionalIdentifiers ?? {}
-        return Object.keys(identifiers).length
-          ? [{ registrationId: student.registrationId, identifiers }]
-          : []
-      }),
-    })
+      p_rows: rows,
+    }
+    const { data, error } = sensitiveRows.length
+      ? await supabase.rpc('commit_student_import', { ...params, p_sensitive_rows: sensitiveRows })
+      : await supabase.rpc('commit_student_import', params)
+    if (error?.code === 'PGRST202' && sensitiveRows.length) {
+      throw new Error('Supabase is missing the protected student import RPC. Run migration 0004_extended_student_import_attributes.sql, then retry.')
+    }
     if (error) throw error
     const result = object(data)
     if (
