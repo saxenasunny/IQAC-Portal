@@ -11,21 +11,72 @@ import type { ImportJob, Student } from '@/types'
 const FIELD_MAP: Record<string, string> = {
   'registration id': 'registrationId',
   registration_id: 'registrationId',
+  'student id': 'registrationId',
+  'student registration id': 'registrationId',
   'application number': 'applicationNumber',
+  'application no': 'applicationNumber',
+  'application id': 'applicationNumber',
   name: 'fullName',
   'full name': 'fullName',
+  'student name': 'fullName',
+  'student full name': 'fullName',
+  'full_name': 'fullName',
   email: 'email',
+  'email address': 'email',
   phone: 'phone',
+  'mobile number': 'phone',
+  'mobile': 'phone',
+  'contact number': 'phone',
+  'phone number': 'phone',
   gender: 'gender',
+  sex: 'gender',
   programme: 'programme',
+  program: 'programme',
+  'program name': 'programme',
+  'programme name': 'programme',
+  course: 'programme',
+  'course name': 'programme',
   department: 'department',
+  'department name': 'department',
   'batch year': 'batchYear',
+  'academic year': 'batchYear',
+  'year of admission': 'batchYear',
+  'batch': 'batchYear',
   nationality: 'nationality',
   category: 'category',
   status: 'studentStatus',
+  'student status': 'studentStatus',
+  'admission status': 'studentStatus',
 }
 
 const REQUIRED = ['registrationId', 'fullName']
+
+function normalizeImportValue(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function findProgrammeMatch(value: string) {
+  const normalized = normalizeImportValue(value)
+  if (!normalized) return null
+
+  return catalog.programmes.find((programme) => {
+    const aliases = new Set([
+      normalizeImportValue(programme.name),
+      normalizeImportValue(programme.code),
+      normalizeImportValue(programme.name.replace(/\./g, ' ')),
+      normalizeImportValue(programme.code.replace(/[-_]/g, ' ')),
+      normalizeImportValue(programme.name.replace(/\s+/g, ' ')),
+      normalizeImportValue(programme.code.replace(/\s+/g, ' ')),
+    ])
+
+    return [...aliases].some((alias) => alias === normalized || normalized.includes(alias) || alias.includes(normalized))
+  })
+}
 
 export function ImportPage() {
   const user = usePortalStore((s) => s.currentUser)!
@@ -105,7 +156,7 @@ export function ImportPage() {
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) issues.push({ row: idx + 2, severity: 'error', field: 'email', message: 'Invalid email' })
       if (registrationId && seen.has(registrationId.toLowerCase())) issues.push({ row: idx + 2, severity: 'error', field: 'registrationId', message: 'Duplicate Registration ID in file' })
       if (registrationId) seen.add(registrationId.toLowerCase())
-      const programme = catalog.programmes.find((p) => p.name.toLowerCase() === programmeName.toLowerCase() || p.code.toLowerCase() === programmeName.toLowerCase())
+      const programme = findProgrammeMatch(programmeName)
       if (programmeName && !programme) issues.push({ row: idx + 2, severity: 'error', field: 'programme', message: `Unknown programme: ${programmeName}` })
       const gender = get('gender').toLowerCase()
       if (gender && !['male', 'female', 'other'].includes(gender)) issues.push({ row: idx + 2, severity: 'warning', field: 'gender', message: 'Invalid gender; defaulting to unspecified handling' })
