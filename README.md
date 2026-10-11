@@ -7,7 +7,7 @@ Institution-level portal for Apex University's Internal Quality Assurance Cell. 
 - Role-based access (Super Admin, IQAC, Registrar, Dean, HOD, Faculty, Data Entry, Verifier, Auditor)
 - Normalized student and faculty databases (sensitive fields isolated and masked)
 - Schools, departments, programmes, batches
-- Excel/CSV import with column mapping, validation and preview
+- Excel/CSV student import with mapping for core, academic, personal and contact fields, validation, preview, and retained custom attributes
 - Document repository with versioning and many-to-many evidence links
 - Generic accreditation framework engine (not hard-coded to NAAC)
 - Configurable metric formulas with data lineage
@@ -63,7 +63,7 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 ```
 
-Do not commit `.env`. The UI runs on seeded local state if these are empty.
+Do not commit `.env`. The UI runs on seeded local state if these are empty. Student imports currently save to the portal's persisted browser state; they are not written to Supabase.
 
 ## Supabase Setup
 

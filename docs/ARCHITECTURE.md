@@ -21,4 +21,6 @@ Every dashboard number should answer: source table, filters, calculation, last u
 
 ## Import
 
-Upload → auto/manual map → validate → preview new/updated/unchanged/errors → commit. Critical-error rows never land in `students`.
+Upload → auto/manual map → validate → preview new/updated/unchanged/errors → commit. Core student fields are mapped to the student model; unrecognized source columns are retained as custom attributes. Critical-error rows never land in `students`.
+
+The current import commit writes to the portal's persisted Zustand browser state. Supabase student/import writes are not wired yet.

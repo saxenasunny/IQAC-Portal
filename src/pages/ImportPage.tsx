@@ -8,56 +8,134 @@ import { catalog, usePortalStore } from '@/store/portalStore'
 import { uid } from '@/lib/utils'
 import type { ImportJob, Student } from '@/types'
 
-const FIELD_MAP: Record<string, string> = {
-  'registration id': 'registrationId',
-  registration_id: 'registrationId',
-  'student id': 'registrationId',
-  'student registration id': 'registrationId',
-  'application number': 'applicationNumber',
-  'application no': 'applicationNumber',
-  'application id': 'applicationNumber',
-  name: 'fullName',
-  'full name': 'fullName',
-  'student name': 'fullName',
-  'student full name': 'fullName',
-  'full_name': 'fullName',
-  email: 'email',
-  'email address': 'email',
-  phone: 'phone',
-  'mobile number': 'phone',
-  'mobile': 'phone',
-  'contact number': 'phone',
-  'phone number': 'phone',
-  gender: 'gender',
-  sex: 'gender',
-  programme: 'programme',
-  program: 'programme',
-  'program name': 'programme',
-  'programme name': 'programme',
-  course: 'programme',
-  'course name': 'programme',
-  department: 'department',
-  'department name': 'department',
-  'batch year': 'batchYear',
-  'academic year': 'batchYear',
-  'year of admission': 'batchYear',
-  'batch': 'batchYear',
-  nationality: 'nationality',
-  category: 'category',
-  status: 'studentStatus',
-  'student status': 'studentStatus',
-  'admission status': 'studentStatus',
-}
+const IMPORT_FIELDS = [
+  { id: 'registrationId', label: 'Registration ID', aliases: ['registration id', 'registration no', 'student id', 'student registration id'] },
+  { id: 'applicationNumber', label: 'Application Number', aliases: ['application number', 'application no', 'application id'] },
+  { id: 'universityRollNumber', label: 'University Roll Number', aliases: ['university roll number', 'university roll no', 'roll number', 'roll no'] },
+  { id: 'fullName', label: 'Name', aliases: ['name', 'full name', 'student name', 'student full name'] },
+  { id: 'email', label: 'Email', aliases: ['email', 'email address', 'student email'] },
+  { id: 'phone', label: 'Phone Number', aliases: ['phone', 'phone number', 'mobile', 'mobile number', 'contact number'] },
+  { id: 'gender', label: 'Gender', aliases: ['gender', 'sex'] },
+  { id: 'dateOfBirth', label: 'Date of Birth', aliases: ['date of birth', 'dob', 'birth date'] },
+  { id: 'nationality', label: 'Nationality', aliases: ['nationality', 'citizenship'] },
+  { id: 'programme', label: 'Programme', aliases: ['programme', 'program', 'programme name', 'program name', 'course', 'course name'] },
+  { id: 'department', label: 'Department', aliases: ['department', 'department name', 'department code'] },
+  { id: 'school', label: 'School', aliases: ['school', 'school name', 'school code'] },
+  { id: 'batchYear', label: 'Batch Year', aliases: ['batch year', 'batch', 'admission year', 'year of admission'] },
+  { id: 'academicYear', label: 'Academic Year', aliases: ['academic year', 'session', 'academic session'] },
+  { id: 'currentYear', label: 'Current Year', aliases: ['current year', 'year of study', 'study year'] },
+  { id: 'currentTerm', label: 'Current Semester / Term', aliases: ['current semester', 'semester', 'current term', 'term'] },
+  { id: 'studentStatus', label: 'Student Status', aliases: ['status', 'student status', 'admission status'] },
+  { id: 'academicStatus', label: 'Academic Status', aliases: ['academic status', 'student type'] },
+  { id: 'admissionType', label: 'Admission Type', aliases: ['admission type', 'admission category'] },
+  { id: 'quota', label: 'Quota', aliases: ['quota', 'admission quota', 'seat quota'] },
+  { id: 'personal.firstName', label: 'First Name', aliases: ['first name', 'given name', "name's first name", 'names first name'] },
+  { id: 'personal.middleName', label: 'Middle Name', aliases: ['middle name'] },
+  { id: 'personal.lastName', label: 'Last Name', aliases: ['last name', 'surname', 'family name'] },
+  { id: 'personal.title', label: 'Title', aliases: ['title', 'salutation'] },
+  { id: 'personal.religion', label: 'Religion', aliases: ['religion'] },
+  { id: 'personal.bloodGroup', label: 'Blood Group', aliases: ['blood group', 'blood type'] },
+  { id: 'personal.motherTongue', label: 'Mother Tongue', aliases: ['mother tongue'] },
+  { id: 'personal.category', label: 'Category', aliases: ['category', 'social category', 'caste category'] },
+  { id: 'personal.domicileState', label: 'Domicile State', aliases: ['domicile state', 'state of domicile'] },
+  { id: 'personal.firstGeneration', label: 'First-Generation Student', aliases: ['first generation', 'first generation student'] },
+  { id: 'personal.differentlyAbled', label: 'Differently-Abled', aliases: ['differently abled', 'disability', 'person with disability', 'pwd'] },
+  { id: 'personal.ews', label: 'EWS', aliases: ['ews', 'economically weaker section'] },
+  { id: 'academic.cgpa', label: 'CGPA', aliases: ['cgpa', 'cumulative grade point average'] },
+  { id: 'academic.percentage', label: 'Percentage', aliases: ['percentage', 'aggregate percentage', 'overall percentage'] },
+  { id: 'academic.backlogs', label: 'Backlogs', aliases: ['backlogs', 'backlog count'] },
+  { id: 'academic.admissionDate', label: 'Date of Joining / Admission', aliases: ['date of joining', 'date of admission', 'joining date', 'admission date'] },
+  { id: 'academic.expectedGraduation', label: 'Expected Graduation', aliases: ['expected graduation', 'year of graduation', 'graduation year'] },
+  { id: 'contact.personalEmail', label: 'Personal Email', aliases: ['personal email', 'alternate email', 'email id personal'] },
+  { id: 'contact.alternatePhone', label: 'Alternate Phone', aliases: ['alternate phone', 'alternate mobile', 'personal mobile', 'alternate mobile number'] },
+  { id: 'contact.emergencyContactName', label: 'Emergency Contact Name', aliases: ['emergency contact name', 'emergency contact'] },
+  { id: 'contact.emergencyContactPhone', label: 'Emergency Contact Phone', aliases: ['emergency contact phone', 'emergency contact number'] },
+  { id: 'family.fatherName', label: "Father's Name", aliases: ["father's name", 'fathers name', 'father name', "father's full name"] },
+  { id: 'family.fatherOccupation', label: "Father's Occupation", aliases: ["father's occupation", 'father occupation', 'father profession'] },
+  { id: 'family.motherName', label: "Mother's Name", aliases: ["mother's name", 'mothers name', 'mother name', "mother's full name"] },
+  { id: 'family.motherOccupation', label: "Mother's Occupation", aliases: ["mother's occupation", 'mother occupation', 'mother profession'] },
+  { id: 'family.annualIncome', label: 'Family Annual Income', aliases: ['annual income', 'family income', 'parent income'] },
+  { id: 'qualification.level', label: 'Qualification Level', aliases: ['qualification', 'qualification level', 'exam passed'] },
+  { id: 'qualification.boardUniversity', label: 'Qualification Board / University', aliases: ['board', 'board university', 'board or university', 'university name'] },
+  { id: 'qualification.yearOfPassing', label: 'Qualification Year of Passing', aliases: ['year of passing', 'passing year'] },
+  { id: 'qualification.percentage', label: 'Qualification Percentage', aliases: ['qualification percentage', 'class percentage', 'marks percentage'] },
+  { id: 'entranceExam.examName', label: 'Entrance Exam Name', aliases: ['entrance exam', 'entrance exam name', 'exam name'] },
+  { id: 'entranceExam.score', label: 'Entrance Exam Score', aliases: ['entrance score', 'exam score', 'entrance exam score'] },
+  { id: 'entranceExam.rank', label: 'Entrance Exam Rank', aliases: ['entrance rank', 'exam rank', 'entrance exam rank'] },
+  { id: 'entranceExam.year', label: 'Entrance Exam Year', aliases: ['entrance exam year', 'exam year'] },
+  { id: 'mentor.name', label: 'Mentor Name', aliases: ['mentor', 'mentor name', 'faculty mentor'] },
+  { id: 'mentor.email', label: 'Mentor Email', aliases: ['mentor email', 'faculty mentor email'] },
+  { id: 'mentor.phone', label: 'Mentor Phone', aliases: ['mentor phone', 'mentor mobile'] },
+  { id: 'sensitive.aadhaar', label: 'Aadhaar Number', aliases: ['aadhaar', 'aadhaar number', 'aadhar', 'aadhar number', 'uid number'] },
+  { id: 'sensitive.pan', label: 'PAN Number', aliases: ['pan', 'pan number', 'pan card'] },
+  { id: 'sensitive.bankAccount', label: 'Bank Account Number', aliases: ['bank account', 'bank account number', 'account number'] },
+  { id: 'sensitive.ifsc', label: 'Bank IFSC', aliases: ['ifsc', 'ifsc code'] },
+  { id: 'sensitive.abcId', label: 'ABC ID', aliases: ['abc id', 'academic bank of credits id'] },
+  { id: 'address.permanent.line1', label: 'Permanent Address', aliases: ['permanent address', 'address permanent', 'p address', 'permanent address line 1', 'address line 1'] },
+  { id: 'address.permanent.line2', label: 'Permanent Address Line 2', aliases: ['permanent address line 2', 'p address line 2', 'address line 2'] },
+  { id: 'address.permanent.city', label: 'Permanent City', aliases: ['permanent city', 'city permanent', 'p city'] },
+  { id: 'address.permanent.state', label: 'Permanent State', aliases: ['permanent state', 'state permanent', 'p state'] },
+  { id: 'address.permanent.pincode', label: 'Permanent PIN Code', aliases: ['permanent pincode', 'permanent pin code', 'permanent postal code', 'p pincode', 'p pin code'] },
+  { id: 'address.permanent.country', label: 'Permanent Country', aliases: ['permanent country', 'p country'] },
+  { id: 'address.present.line1', label: 'Present Address', aliases: ['present address', 'current address', 'communication address', 'c address', 'present address line 1', 'current address line 1'] },
+  { id: 'address.present.line2', label: 'Present Address Line 2', aliases: ['present address line 2', 'current address line 2', 'c address line 2'] },
+  { id: 'address.present.city', label: 'Present City', aliases: ['present city', 'current city', 'c city'] },
+  { id: 'address.present.state', label: 'Present State', aliases: ['present state', 'current state', 'c state'] },
+  { id: 'address.present.pincode', label: 'Present PIN Code', aliases: ['present pincode', 'present pin code', 'current pincode', 'c pincode', 'c pin code'] },
+  { id: 'address.present.country', label: 'Present Country', aliases: ['present country', 'current country', 'c country'] },
+] as const
 
-const REQUIRED = ['registrationId', 'fullName']
+type ImportFieldId = (typeof IMPORT_FIELDS)[number]['id'] | `custom:${string}`
+
+const FIELD_BY_ALIAS = new Map(
+  IMPORT_FIELDS.flatMap((field) =>
+    [field.label, ...field.aliases].map((alias) => [normalizeImportValue(alias), field.id] as const),
+  ),
+)
 
 function normalizeImportValue(value: string) {
   return value
     .toLowerCase()
+    .replace(/[’‘`]/g, "'")
     .replace(/&/g, ' and ')
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function fieldForHeader(header: string): ImportFieldId {
+  return FIELD_BY_ALIAS.get(normalizeImportValue(header)) ?? `custom:${header}`
+}
+
+function parseImportNumber(value: string): number | undefined {
+  if (!value.trim()) return undefined
+  const parsed = Number(value.replace(/,/g, '').match(/-?\d+(\.\d+)?/)?.[0])
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function parseImportBoolean(value: string): boolean {
+  return ['1', 'yes', 'y', 'true'].includes(normalizeImportValue(value))
+}
+
+function parseImportDate(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+
+  if (/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(trimmed)) {
+    const [dayOrMonth, monthOrDay, year] = trimmed.split(/[/-]/).map(Number)
+    const [day, month] = dayOrMonth > 12 ? [dayOrMonth, monthOrDay] : [monthOrDay, dayOrMonth]
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+
+  const serial = Number(trimmed)
+  if (Number.isFinite(serial) && serial > 0 && serial < 100000) {
+    const date = XLSX.SSF.parse_date_code(serial)
+    if (date) return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`
+  }
+
+  const date = new Date(trimmed)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10)
 }
 
 function findProgrammeMatch(value: string) {
@@ -65,16 +143,14 @@ function findProgrammeMatch(value: string) {
   if (!normalized) return null
 
   return catalog.programmes.find((programme) => {
-    const aliases = new Set([
+    const aliases = [
       normalizeImportValue(programme.name),
       normalizeImportValue(programme.code),
       normalizeImportValue(programme.name.replace(/\./g, ' ')),
       normalizeImportValue(programme.code.replace(/[-_]/g, ' ')),
-      normalizeImportValue(programme.name.replace(/\s+/g, ' ')),
-      normalizeImportValue(programme.code.replace(/\s+/g, ' ')),
-    ])
+    ]
 
-    return [...aliases].some((alias) => alias === normalized || normalized.includes(alias) || alias.includes(normalized))
+    return aliases.some((alias) => alias === normalized || alias.replace(/\s/g, '') === normalized.replace(/\s/g, ''))
   })
 }
 
@@ -87,7 +163,7 @@ export function ImportPage() {
   const [job, setJob] = useState<ImportJob | null>(null)
   const [headers, setHeaders] = useState<string[]>([])
   const [mapping, setMapping] = useState<Record<string, string>>({})
-  const [sourceRows, setSourceRows] = useState<Record<string, string>[]>([])
+  const [sourceRows, setSourceRows] = useState<Record<string, unknown>[]>([])
 
   if (!canImport(user.role)) {
     return <div><PageHeader title="Import Data" /><Card className="p-6 text-sm text-navy-600">Your role cannot import institutional data.</Card></div>
@@ -98,12 +174,11 @@ export function ImportPage() {
     reader.onload = () => {
       const wb = XLSX.read(reader.result, { type: 'array' })
       const sheet = wb.Sheets[wb.SheetNames[0]]
-      const json = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, string>[]
+      const json = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, unknown>[]
       const cols = json[0] ? Object.keys(json[0]) : []
       const auto: Record<string, string> = {}
       cols.forEach((c) => {
-        const mapped = FIELD_MAP[c.toLowerCase().trim()]
-        if (mapped) auto[c] = mapped
+        auto[c] = fieldForHeader(c)
       })
       const created: ImportJob = {
         id: uid('imp'),
@@ -121,7 +196,9 @@ export function ImportPage() {
         uploadedBy: user.fullName,
         createdAt: new Date().toISOString(),
         errors: [],
-        previewRows: json.slice(0, 200) as Record<string, string>[],
+        previewRows: json.slice(0, 200).map((row) =>
+          Object.fromEntries(Object.entries(row).map(([key, value]) => [key, String(value ?? '')])),
+        ),
       }
       setHeaders(cols)
       setSourceRows(json)
@@ -142,12 +219,17 @@ export function ImportPage() {
     let warn = 0
     const built: Student[] = []
     sourceRows.forEach((row, idx) => {
-      const get = (field: string) => {
-        const col = Object.entries(mapping).find(([, v]) => v === field)?.[0]
+      const get = (field: ImportFieldId) => {
+        const col = Object.entries(mapping).find(([, value]) => value === field)?.[0]
         return col ? String(row[col] ?? '').trim() : ''
       }
       const registrationId = get('registrationId')
+      const existingStudent = registrationId
+        ? students.find((student) => student.registrationId.toLowerCase() === registrationId.toLowerCase())
+        : undefined
       const fullName = get('fullName')
+        || [get('personal.firstName'), get('personal.middleName'), get('personal.lastName')].filter(Boolean).join(' ')
+        || existingStudent?.fullName
       const email = get('email')
       const programmeName = get('programme')
       const issues: ImportJob['errors'] = []
@@ -158,9 +240,40 @@ export function ImportPage() {
       if (registrationId) seen.add(registrationId.toLowerCase())
       const programme = findProgrammeMatch(programmeName)
       if (programmeName && !programme) issues.push({ row: idx + 2, severity: 'error', field: 'programme', message: `Unknown programme: ${programmeName}` })
-      const gender = get('gender').toLowerCase()
-      if (gender && !['male', 'female', 'other'].includes(gender)) issues.push({ row: idx + 2, severity: 'warning', field: 'gender', message: 'Invalid gender; defaulting to unspecified handling' })
-      if (issues.some((i) => i.severity === 'error')) {
+      const departmentName = get('department')
+      const department = departmentName
+        ? catalog.departments.find((item) => normalizeImportValue(item.name) === normalizeImportValue(departmentName) || normalizeImportValue(item.code) === normalizeImportValue(departmentName))
+        : catalog.departments.find((item) => item.id === existingStudent?.departmentId)
+      if (departmentName && !department) issues.push({ row: idx + 2, severity: 'error', field: 'department', message: `Unknown department: ${departmentName}` })
+      if (programme && department && programme.departmentId !== department.id) {
+        issues.push({ row: idx + 2, severity: 'error', field: 'department', message: 'Department does not match the selected programme' })
+      }
+      const schoolName = get('school')
+      const school = schoolName
+        ? catalog.schools.find((item) => normalizeImportValue(item.name) === normalizeImportValue(schoolName) || normalizeImportValue(item.code) === normalizeImportValue(schoolName))
+        : catalog.schools.find((item) => item.id === existingStudent?.schoolId)
+      if (schoolName && !school) issues.push({ row: idx + 2, severity: 'error', field: 'school', message: `Unknown school: ${schoolName}` })
+      if (school && department && department.schoolId !== school.id) {
+        issues.push({ row: idx + 2, severity: 'error', field: 'school', message: 'School does not match the selected department' })
+      }
+      if (school && programme && catalog.departments.find((item) => item.id === programme.departmentId)?.schoolId !== school.id) {
+        issues.push({ row: idx + 2, severity: 'error', field: 'school', message: 'School does not match the selected programme' })
+      }
+      const genderValue = normalizeImportValue(get('gender'))
+      const gender = genderValue === 'm' || genderValue === 'male' ? 'male'
+        : genderValue === 'f' || genderValue === 'female' ? 'female'
+          : genderValue === 'other' ? 'other'
+            : genderValue ? 'prefer_not_to_say' : existingStudent?.gender ?? 'prefer_not_to_say'
+      if (genderValue && gender === 'prefer_not_to_say') issues.push({ row: idx + 2, severity: 'warning', field: 'gender', message: 'Unrecognized gender; using unspecified' })
+      const statusValue = normalizeImportValue(get('studentStatus')).replace(/ /g, '_')
+      const studentStatuses: Student['studentStatus'][] = ['active', 'inactive', 'graduated', 'alumni', 'withdrawn', 'suspended']
+      const studentStatus = studentStatuses.find((status) => status === statusValue)
+      if (statusValue && !studentStatus) issues.push({ row: idx + 2, severity: 'warning', field: 'studentStatus', message: `Unrecognized student status "${get('studentStatus')}"; keeping the existing status or using active` })
+      const academicStatusValue = normalizeImportValue(get('academicStatus')).replace(/ /g, '_')
+      const academicStatuses: Student['academicStatus'][] = ['regular', 'lateral', 're_admitted', 'detained']
+      const academicStatus = academicStatuses.find((status) => status === academicStatusValue)
+      if (academicStatusValue && !academicStatus) issues.push({ row: idx + 2, severity: 'warning', field: 'academicStatus', message: `Unrecognized academic status "${get('academicStatus')}"; keeping the existing status or using regular` })
+      if (!registrationId || !fullName || issues.some((i) => i.severity === 'error')) {
         errors.push(...issues)
         return
       }
@@ -169,40 +282,133 @@ export function ImportPage() {
         errors.push(...issues)
       }
       valid += 1
-      const dept = programme ? catalog.departments.find((d) => d.id === programme.departmentId) : catalog.departments[0]
-      const prog = programme ?? catalog.programmes[0]
-      const batch = catalog.batches.find((b) => b.programmeId === prog.id) ?? catalog.batches[0]
+      const prog = programme
+        ?? (departmentName ? catalog.programmes.find((item) => item.departmentId === department?.id) : null)
+        ?? (schoolName ? catalog.programmes.find((item) => catalog.departments.find((deptItem) => deptItem.id === item.departmentId)?.schoolId === school?.id) : null)
+        ?? catalog.programmes.find((item) => item.id === existingStudent?.programmeId)
+        ?? catalog.programmes.find((item) => item.departmentId === department?.id)
+        ?? catalog.programmes.find((item) => catalog.departments.find((deptItem) => deptItem.id === item.departmentId)?.schoolId === school?.id)
+        ?? catalog.programmes[0]
+      const dept = catalog.departments.find((item) => item.id === prog.departmentId)!
+      const batchYearValue = get('batchYear')
+      const batchYear = Number(batchYearValue.match(/\b(19|20)\d{2}\b/)?.[0])
+      const batch = catalog.batches.find((item) => item.programmeId === prog.id && (!batchYear || item.year === batchYear))
+        ?? catalog.batches.find((item) => item.id === existingStudent?.batchId && item.programmeId === prog.id)
+        ?? catalog.batches.find((item) => item.programmeId === prog.id)
+      const academicYearValue = normalizeImportValue(get('academicYear'))
+      const academicYear = catalog.academicYears.find((item) => normalizeImportValue(item.label) === academicYearValue)
+        ?? catalog.academicYears.find((item) => academicYearValue && normalizeImportValue(item.label).startsWith(academicYearValue.slice(0, 4)))
+      const customFields = Object.fromEntries(
+        Object.entries(mapping)
+          .filter(([, field]) => field.startsWith('custom:'))
+          .map(([column, field]) => [field.slice('custom:'.length) || column, String(row[column] ?? '').trim()])
+          .filter(([, value]) => value),
+      )
+      const qualification = {
+        level: get('qualification.level'),
+        boardUniversity: get('qualification.boardUniversity'),
+        yearOfPassing: parseImportNumber(get('qualification.yearOfPassing')) ?? 0,
+        percentage: parseImportNumber(get('qualification.percentage')) ?? 0,
+      }
+      const entranceExam = {
+        examName: get('entranceExam.examName'),
+        score: parseImportNumber(get('entranceExam.score')),
+        rank: parseImportNumber(get('entranceExam.rank')),
+        year: parseImportNumber(get('entranceExam.year')) ?? new Date().getFullYear(),
+      }
+      const addresses = (['permanent', 'present'] as const).flatMap((type) => {
+        const prefix = `address.${type}.` as const
+        const address = {
+          type,
+          line1: get(`${prefix}line1`),
+          line2: get(`${prefix}line2`),
+          city: get(`${prefix}city`),
+          state: get(`${prefix}state`),
+          pincode: get(`${prefix}pincode`),
+          country: get(`${prefix}country`),
+        }
+        return [address.line1, address.line2, address.city, address.state, address.pincode, address.country].some(Boolean) ? [address] : []
+      })
+      const sensitive = {
+        aadhaar: get('sensitive.aadhaar') || existingStudent?.sensitive?.aadhaar,
+        pan: get('sensitive.pan') || existingStudent?.sensitive?.pan,
+        bankAccount: get('sensitive.bankAccount') || existingStudent?.sensitive?.bankAccount,
+        ifsc: get('sensitive.ifsc') || existingStudent?.sensitive?.ifsc,
+        abcId: get('sensitive.abcId') || existingStudent?.sensitive?.abcId,
+      }
       built.push({
         id: uid('stu'),
         registrationId,
-        applicationNumber: `APP${registrationId}`,
-        universityRollNumber: registrationId,
+        applicationNumber: get('applicationNumber') || existingStudent?.applicationNumber || `APP${registrationId}`,
+        universityRollNumber: get('universityRollNumber') || existingStudent?.universityRollNumber || registrationId,
         fullName,
-        email,
-        phone: get('phone'),
-        gender: gender === 'male' || gender === 'female' ? gender : 'prefer_not_to_say',
-        dateOfBirth: '2004-01-01',
-        nationality: get('nationality') || 'India',
+        email: email || existingStudent?.email || '',
+        phone: get('phone') || existingStudent?.phone || '',
+        gender,
+        dateOfBirth: parseImportDate(get('dateOfBirth')) || existingStudent?.dateOfBirth || '',
+        nationality: get('nationality') || existingStudent?.nationality || 'India',
+        quota: get('quota') || existingStudent?.quota,
         programmeId: prog.id,
-        departmentId: dept!.id,
-        schoolId: dept!.schoolId,
-        batchId: batch.id,
-        academicYearId: 'ay_2526',
-        currentYear: 1,
-        currentTerm: 'Odd',
-        studentStatus: (get('studentStatus') as Student['studentStatus']) || 'active',
-        academicStatus: 'regular',
-        admissionType: 'Merit',
-        workflow: 'submitted',
-        isArchived: false,
-        personal: { firstName: fullName.split(' ')[0], lastName: fullName.split(' ').slice(1).join(' '), firstGeneration: false, differentlyAbled: false, ews: false, domicileState: 'Rajasthan', category: get('category') || 'General' },
-        academic: { backlogs: 0, admissionDate: '2025-07-15' },
-        contact: {},
-        addresses: [],
-        family: {},
-        qualifications: [],
-        entranceExams: [],
-        createdAt: new Date().toISOString(),
+        departmentId: dept.id,
+        schoolId: dept.schoolId,
+        batchId: batch?.id ?? existingStudent?.batchId ?? '',
+        academicYearId: academicYear?.id ?? batch?.academicYearId ?? existingStudent?.academicYearId ?? catalog.academicYears.find((year) => year.isCurrent)?.id ?? '',
+        currentYear: parseImportNumber(get('currentYear')) ?? existingStudent?.currentYear ?? 1,
+        currentTerm: get('currentTerm') || existingStudent?.currentTerm || '',
+        studentStatus: studentStatus ?? existingStudent?.studentStatus ?? 'active',
+        academicStatus: academicStatus ?? existingStudent?.academicStatus ?? 'regular',
+        admissionType: get('admissionType') || existingStudent?.admissionType || '',
+        workflow: existingStudent?.workflow ?? 'submitted',
+        isArchived: existingStudent?.isArchived ?? false,
+        personal: {
+          ...existingStudent?.personal,
+          firstName: get('personal.firstName') || existingStudent?.personal.firstName || fullName.split(' ')[0],
+          middleName: get('personal.middleName') || existingStudent?.personal.middleName,
+          lastName: get('personal.lastName') || existingStudent?.personal.lastName || fullName.split(' ').slice(1).join(' '),
+          title: get('personal.title') || existingStudent?.personal.title,
+          religion: get('personal.religion') || existingStudent?.personal.religion,
+          bloodGroup: get('personal.bloodGroup') || existingStudent?.personal.bloodGroup,
+          motherTongue: get('personal.motherTongue') || existingStudent?.personal.motherTongue,
+          firstGeneration: get('personal.firstGeneration') ? parseImportBoolean(get('personal.firstGeneration')) : existingStudent?.personal.firstGeneration ?? false,
+          differentlyAbled: get('personal.differentlyAbled') ? parseImportBoolean(get('personal.differentlyAbled')) : existingStudent?.personal.differentlyAbled ?? false,
+          ews: get('personal.ews') ? parseImportBoolean(get('personal.ews')) : existingStudent?.personal.ews ?? false,
+          domicileState: get('personal.domicileState') || existingStudent?.personal.domicileState || '',
+          category: get('personal.category') || existingStudent?.personal.category || '',
+        },
+        academic: {
+          ...existingStudent?.academic,
+          cgpa: parseImportNumber(get('academic.cgpa')) ?? existingStudent?.academic.cgpa,
+          percentage: parseImportNumber(get('academic.percentage')) ?? existingStudent?.academic.percentage,
+          backlogs: parseImportNumber(get('academic.backlogs')) ?? existingStudent?.academic.backlogs ?? 0,
+          admissionDate: parseImportDate(get('academic.admissionDate')) || existingStudent?.academic.admissionDate || '',
+          expectedGraduation: parseImportDate(get('academic.expectedGraduation')) || existingStudent?.academic.expectedGraduation,
+        },
+        contact: {
+          ...existingStudent?.contact,
+          personalEmail: get('contact.personalEmail') || existingStudent?.contact.personalEmail,
+          alternatePhone: get('contact.alternatePhone') || existingStudent?.contact.alternatePhone,
+          emergencyContactName: get('contact.emergencyContactName') || existingStudent?.contact.emergencyContactName,
+          emergencyContactPhone: get('contact.emergencyContactPhone') || existingStudent?.contact.emergencyContactPhone,
+        },
+        addresses: addresses.length ? addresses : existingStudent?.addresses ?? [],
+        family: {
+          ...existingStudent?.family,
+          fatherName: get('family.fatherName') || existingStudent?.family.fatherName,
+          fatherOccupation: get('family.fatherOccupation') || existingStudent?.family.fatherOccupation,
+          motherName: get('family.motherName') || existingStudent?.family.motherName,
+          motherOccupation: get('family.motherOccupation') || existingStudent?.family.motherOccupation,
+          annualIncome: parseImportNumber(get('family.annualIncome')) ?? existingStudent?.family.annualIncome,
+        },
+        qualifications: Object.values(qualification).some(Boolean) ? [qualification] : existingStudent?.qualifications ?? [],
+        entranceExams: entranceExam.examName ? [entranceExam] : existingStudent?.entranceExams ?? [],
+        mentor: get('mentor.name') ? {
+          name: get('mentor.name'),
+          email: get('mentor.email') || existingStudent?.mentor?.email || '',
+          phone: get('mentor.phone') || existingStudent?.mentor?.phone || '',
+        } : existingStudent?.mentor,
+        sensitive: Object.values(sensitive).some(Boolean) ? sensitive : existingStudent?.sensitive,
+        customFields: { ...existingStudent?.customFields, ...customFields },
+        createdAt: existingStudent?.createdAt ?? new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
     })
@@ -214,7 +420,7 @@ export function ImportPage() {
   function confirm() {
     if (!job || !validated) return
     commitImportStudents(validated.built, job.id)
-    toast.success('Import committed to central student database')
+    toast.success(`${validated.built.length} student records saved in this portal`)
     setJob({ ...job, status: 'committed' })
   }
 
@@ -228,7 +434,7 @@ export function ImportPage() {
 
   return (
     <div>
-      <PageHeader title="Import Data" subtitle="Map Excel/CSV columns to the normalized student model. Critical errors are blocked." />
+      <PageHeader title="Import Data" subtitle="Map Excel/CSV columns to student attributes. Unmatched columns are retained as custom attributes; critical errors are blocked." />
       <Card className="p-5">
         <p className="text-sm font-medium">Upload Student Excel</p>
         <input className="mt-3 text-sm" type="file" accept=".xlsx,.xls,.csv" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
@@ -246,9 +452,10 @@ export function ImportPage() {
                 <span className="truncate text-navy-600">{h}</span>
                 <Select value={mapping[h] ?? ''} onChange={(e) => setMapping((m) => ({ ...m, [h]: e.target.value }))}>
                   <option value="">Ignore</option>
-                  {['registrationId', 'fullName', 'email', 'phone', 'gender', 'programme', 'department', 'batchYear', 'nationality', 'category', 'studentStatus', 'applicationNumber'].map((f) => (
-                    <option key={f} value={f}>{f}</option>
+                  {IMPORT_FIELDS.map((field) => (
+                    <option key={field.id} value={field.id}>{field.label}</option>
                   ))}
+                  <option value={`custom:${h}`}>Keep as custom attribute: {h}</option>
                 </Select>
               </div>
             ))}

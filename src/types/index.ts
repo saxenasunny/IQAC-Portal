@@ -140,13 +140,17 @@ export interface Student {
   studentStatus: StudentStatus
   academicStatus: AcademicStatus
   admissionType: string
+  quota?: string
   workflow: WorkflowStatus
   isArchived: boolean
   personal: {
     firstName: string
+    middleName?: string
     lastName: string
+    title?: string
     religion?: string
     bloodGroup?: string
+    motherTongue?: string
     firstGeneration: boolean
     differentlyAbled: boolean
     ews: boolean
@@ -169,9 +173,11 @@ export interface Student {
   addresses: Array<{
     type: 'permanent' | 'present' | 'communication'
     line1: string
+    line2?: string
     city: string
     state: string
     pincode: string
+    country?: string
   }>
   family: {
     fatherName?: string
@@ -194,6 +200,7 @@ export interface Student {
   }>
   mentor?: { name: string; email: string; phone: string }
   sensitive?: { aadhaar?: string; pan?: string; bankAccount?: string; ifsc?: string; abcId?: string }
+  customFields?: Record<string, string>
   createdAt: string
   updatedAt: string
 }

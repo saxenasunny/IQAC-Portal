@@ -71,6 +71,10 @@ export function StudentProfilePage() {
             <Item label="Current Year / Term" value={`${student.currentYear} / ${student.currentTerm}`} />
             <Item label="Admission Type" value={student.admissionType} />
             <Item label="Academic Status" value={student.academicStatus} />
+            <Item label="Quota" value={student.quota ?? '—'} />
+            {Object.entries(student.customFields ?? {}).map(([label, value]) => (
+              <Item key={label} label={label} value={value} />
+            ))}
           </dl>
         )}
         {tab === 'Academic' && (
@@ -86,6 +90,10 @@ export function StudentProfilePage() {
         {tab === 'Personal' && (
           <dl className="grid gap-4 sm:grid-cols-2 text-sm">
             <Item label="Category" value={student.personal.category} />
+            <Item label="Title" value={student.personal.title ?? '—'} />
+            <Item label="Middle Name" value={student.personal.middleName ?? '—'} />
+            <Item label="Religion" value={student.personal.religion ?? '—'} />
+            <Item label="Mother Tongue" value={student.personal.motherTongue ?? '—'} />
             <Item label="EWS" value={student.personal.ews ? 'Yes' : 'No'} />
             <Item label="Differently Abled" value={student.personal.differentlyAbled ? 'Yes' : 'No'} />
             <Item label="First Generation" value={student.personal.firstGeneration ? 'Yes' : 'No'} />
@@ -109,7 +117,7 @@ export function StudentProfilePage() {
             <Item label="Emergency Contact" value={student.contact.emergencyContactName ?? '—'} />
             <Item label="Emergency Phone" value={student.contact.emergencyContactPhone ?? '—'} />
             {student.addresses.map((a) => (
-              <Item key={a.type} label={`${a.type} address`} value={`${a.line1}, ${a.city}, ${a.state} ${a.pincode}`} />
+              <Item key={a.type} label={`${a.type} address`} value={[a.line1, a.line2, a.city, a.state, a.pincode, a.country].filter(Boolean).join(', ')} />
             ))}
           </div>
         )}

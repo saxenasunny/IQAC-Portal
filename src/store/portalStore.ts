@@ -190,12 +190,12 @@ export const usePortalStore = create<PortalState>()(
       addTask: (task) => set({ tasks: [task, ...get().tasks] }),
       addImport: (job) => set({ imports: [job, ...get().imports] }),
       commitImportStudents: (rows, jobId) => {
-        const existingByReg = new Map(get().students.map((s) => [s.registrationId, s]))
+        const existingByReg = new Map(get().students.map((s) => [s.registrationId.toLowerCase(), s]))
         let created = 0
         let updated = 0
         const next = [...get().students]
         for (const row of rows) {
-          const found = existingByReg.get(row.registrationId)
+          const found = existingByReg.get(row.registrationId.toLowerCase())
           if (found) {
             const idx = next.findIndex((s) => s.id === found.id)
             next[idx] = { ...found, ...row, id: found.id, updatedAt: new Date().toISOString() }
