@@ -49,6 +49,8 @@ interface PortalState {
   updateRequirement: (id: string, patch: Partial<FrameworkRequirement>) => void
   addTask: (task: FrameworkTask) => void
   addImport: (job: ImportJob) => void
+  mergeImportedStudents: (rows: Student[]) => void
+  setImportStatus: (jobId: string, status: ImportJob['status']) => void
   commitImportStudents: (rows: Student[], jobId: string) => void
   markNotificationRead: (id: string) => void
   addAudit: (log: Omit<AuditLog, 'id' | 'createdAt' | 'actorName' | 'actorRole' | 'ipAddress'> & Partial<Pick<AuditLog, 'actorName' | 'ipAddress'>>) => void
@@ -167,6 +169,23 @@ export const usePortalStore = create<PortalState>()(
       },
       addTask: (task) => set({ tasks: [task, ...get().tasks] }),
       addImport: (job) => set({ imports: [job, ...get().imports] }),
+      mergeImportedStudents: (rows) => {
+        const studentsByRegistration = new Map(
+          get().students.map((student) => [student.registrationId.toLowerCase(), student]),
+        )
+        rows.forEach((row) => {
+          const key = row.registrationId.toLowerCase()
+          const existing = studentsByRegistration.get(key)
+          studentsByRegistration.set(key, existing ? { ...existing, ...row, id: existing.id } : row)
+        })
+        set({ students: [...studentsByRegistration.values()] })
+        get().refreshComputed()
+      },
+      setImportStatus: (jobId, status) => {
+        set({
+          imports: get().imports.map((job) => job.id === jobId ? { ...job, status } : job),
+        })
+      },
       commitImportStudents: (rows, jobId) => {
         const existingByReg = new Map(get().students.map((s) => [s.registrationId.toLowerCase(), s]))
         let created = 0

@@ -287,6 +287,8 @@ export function ImportPage() {
   const user = usePortalStore((s) => s.currentUser)!
   const addImport = usePortalStore((s) => s.addImport)
   const commitImportStudents = usePortalStore((s) => s.commitImportStudents)
+  const mergeImportedStudents = usePortalStore((s) => s.mergeImportedStudents)
+  const setImportStatus = usePortalStore((s) => s.setImportStatus)
   const students = usePortalStore((s) => s.students)
   const jobs = usePortalStore((s) => s.imports)
   const [job, setJob] = useState<ImportJob | null>(null)
@@ -294,6 +296,7 @@ export function ImportPage() {
   const [mapping, setMapping] = useState<Record<string, string>>({})
   const [sourceRows, setSourceRows] = useState<Record<string, unknown>[]>([])
   const [saving, setSaving] = useState(false)
+  const [savingRows, setSavingRows] = useState(0)
   const [importCompleted, setImportCompleted] = useState(false)
 
   if (!canImport(user.role)) {
@@ -336,6 +339,7 @@ export function ImportPage() {
       setMapping(auto)
       setJob(created)
       setImportCompleted(false)
+      setSavingRows(0)
       addImport(created)
       toast.success(`Detected ${json.length} rows and ${cols.length} columns`)
     }
@@ -605,11 +609,16 @@ export function ImportPage() {
 
   async function confirm() {
     if (!job || !validated) return
+    const committedRows: Student[] = []
     setSaving(true)
+    setSavingRows(0)
     try {
       let savedCounts: { created: number; updated: number } | undefined
       if (isSupabaseConfigured && validated.built.length) {
-        savedCounts = await studentService.commitImport(job.fileName, mapping, validated.built)
+        savedCounts = await studentService.commitImport(job.fileName, mapping, validated.built, (batch) => {
+          committedRows.push(...batch)
+          setSavingRows(committedRows.length)
+        })
       }
       commitImportStudents(validated.built, job.id)
       if (!validated.built.length) {
@@ -622,10 +631,15 @@ export function ImportPage() {
       setJob({ ...job, status: 'committed' })
       setImportCompleted(true)
     } catch (error) {
+      if (committedRows.length) {
+        mergeImportedStudents(committedRows)
+        setImportStatus(job.id, 'failed')
+      }
       const message = importErrorMessage(error)
       toast.error(`Import was not saved: ${message}`)
     } finally {
       setSaving(false)
+      setSavingRows(0)
     }
   }
 
@@ -714,7 +728,7 @@ export function ImportPage() {
               <Download size={16} /> Download Issues
             </Button>
             <Button disabled={(!validated.built.length && !skippedRows.length) || saving || importCompleted} onClick={() => void confirm()}>
-              {saving ? 'Saving…' : importCompleted ? 'Import Completed' : 'Confirm Import'}
+              {saving ? `Saving ${savingRows}/${validated.built.length}…` : importCompleted ? 'Import Completed' : 'Confirm Import'}
             </Button>
           </div>
         </Card>

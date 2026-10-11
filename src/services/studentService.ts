@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase'
 
 type Row = Record<string, unknown>
 
+const STUDENT_IMPORT_BATCH_SIZE = 10
+
 const STUDENT_STATUSES: Student['studentStatus'][] = ['active', 'inactive', 'graduated', 'alumni', 'withdrawn', 'suspended']
 const ACADEMIC_STATUSES: Student['academicStatus'][] = ['regular', 'lateral', 're_admitted', 'detained']
 const GENDERS: Gender[] = ['male', 'female', 'other', 'prefer_not_to_say']
@@ -207,35 +209,61 @@ export const studentService = {
     return data.map(mapStudent)
   },
 
-  async commitImport(fileName: string, mapping: Record<string, string>, students: Student[]) {
+  async commitImport(
+    fileName: string,
+    mapping: Record<string, string>,
+    students: Student[],
+    onBatchSaved?: (rows: Student[], totals: { created: number; updated: number }) => void,
+  ) {
     if (!supabase) throw new Error('Supabase is not configured.')
     const rows = students.map(toImportRow)
-    const sensitiveRows = students.flatMap((student) => {
-      const identifiers = student.sensitive?.additionalIdentifiers ?? {}
-      return Object.keys(identifiers).length
-        ? [{ registrationId: student.registrationId, identifiers }]
-        : []
-    })
-    const params = {
-      p_file_name: fileName,
-      p_mapping: mapping,
-      p_rows: rows,
+    let created = 0
+    let updated = 0
+    let completedRows = 0
+
+    for (let offset = 0; offset < students.length; offset += STUDENT_IMPORT_BATCH_SIZE) {
+      const batch = students.slice(offset, offset + STUDENT_IMPORT_BATCH_SIZE)
+      const batchRows = rows.slice(offset, offset + STUDENT_IMPORT_BATCH_SIZE)
+      const sensitiveRows = batch.flatMap((student) => {
+        const identifiers = student.sensitive?.additionalIdentifiers ?? {}
+        return Object.keys(identifiers).length
+          ? [{ registrationId: student.registrationId, identifiers }]
+          : []
+      })
+      const params = {
+        p_file_name: fileName,
+        p_mapping: mapping,
+        p_rows: batchRows,
+      }
+      const { data, error } = sensitiveRows.length
+        ? await supabase.rpc('commit_student_import', { ...params, p_sensitive_rows: sensitiveRows })
+        : await supabase.rpc('commit_student_import', params)
+
+      if (error?.code === 'PGRST202' && sensitiveRows.length) {
+        throw new Error('Supabase is missing the protected student import RPC. Run migration 0004_extended_student_import_attributes.sql, then retry.')
+      }
+      if (error) {
+        const detail = [error.message, error.details, error.hint].filter(Boolean).join(' ')
+        const code = error.code ? ` (${error.code})` : ''
+        const partial = completedRows
+          ? `${completedRows} of ${students.length} valid rows were already saved; retrying the import is safe because records are matched by Registration ID. `
+          : ''
+        throw new Error(`${partial}Batch rows ${offset + 1}-${offset + batch.length} failed${code}: ${detail}`)
+      }
+
+      const result = object(data)
+      if (
+        typeof result.created !== 'number'
+        || typeof result.updated !== 'number'
+        || typeof result.import_id !== 'string'
+      ) {
+        throw new Error(`${completedRows} of ${students.length} valid rows were saved, but Supabase did not confirm batch rows ${offset + 1}-${offset + batch.length}.`)
+      }
+      created += result.created
+      updated += result.updated
+      completedRows += batch.length
+      onBatchSaved?.(batch, { created, updated })
     }
-    const { data, error } = sensitiveRows.length
-      ? await supabase.rpc('commit_student_import', { ...params, p_sensitive_rows: sensitiveRows })
-      : await supabase.rpc('commit_student_import', params)
-    if (error?.code === 'PGRST202' && sensitiveRows.length) {
-      throw new Error('Supabase is missing the protected student import RPC. Run migration 0004_extended_student_import_attributes.sql, then retry.')
-    }
-    if (error) throw error
-    const result = object(data)
-    if (
-      typeof result.created !== 'number'
-      || typeof result.updated !== 'number'
-      || typeof result.import_id !== 'string'
-    ) {
-      throw new Error('Supabase did not confirm the imported student counts.')
-    }
-    return { created: result.created, updated: result.updated, import_id: result.import_id }
+    return { created, updated, rows: completedRows }
   },
 }

@@ -684,6 +684,7 @@ create table if not exists public.notifications (
 -- Indexes
 -- ---------------------------------------------------------------------------
 create index if not exists idx_students_name on public.students (full_name);
+create index if not exists idx_students_registration_id_lower on public.students (lower(registration_id));
 create index if not exists idx_students_programme on public.students (programme_id);
 create index if not exists idx_students_department on public.students (department_id);
 create index if not exists idx_students_status on public.students (student_status);
