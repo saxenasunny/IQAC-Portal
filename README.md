@@ -1,6 +1,6 @@
 # IQAC Accreditation & Ranking Data Management Portal
 
-Institution-level portal for Apex University's Internal Quality Assurance Cell. Central student, faculty, programme and evidence data is stored once and consumed by NAAC, NIRF, NBA, QS, THE and sustainability modules.
+Institution-level portal for GD Goenka University's Internal Quality Assurance Cell. Central student, faculty, programme and evidence data is stored once and consumed by NAAC, NIRF, NBA, QS, THE and sustainability modules.
 
 ## Features (Phase 1)
 

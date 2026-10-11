@@ -5,17 +5,20 @@
 insert into public.institutions (id, name, short_name, type, established_year, naac_grade, nirf_rank, city, state, website)
 values (
   '00000000-0000-0000-0000-000000000001',
-  'Apex University',
-  'Apex',
+  'GD Goenka University',
+  'GD Goenka',
   'Private University',
   2009,
   'A+',
   86,
   'Jaipur',
   'Rajasthan',
-  'https://apex.university'
+  'https://www.gdgoenkauniversity.com'
 )
-on conflict do nothing;
+on conflict (id) do update set
+  name = excluded.name,
+  short_name = excluded.short_name,
+  website = excluded.website;
 
 insert into public.campuses (id, institution_id, name, city, is_main) values
   ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Main Campus', 'Jaipur', true),

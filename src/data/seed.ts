@@ -21,16 +21,16 @@ import type {
 } from '@/types'
 
 export const institution: Institution = {
-  id: 'inst_apex',
-  name: 'Apex University',
-  shortName: 'Apex',
+  id: 'inst_gd_goenka',
+  name: 'GD Goenka University',
+  shortName: 'GD Goenka',
   type: 'Private University',
   establishedYear: 2009,
   naacGrade: 'A+',
   nirfRank: 86,
   city: 'Jaipur',
   state: 'Rajasthan',
-  website: 'https://apex.university',
+  website: 'https://www.gdgoenkauniversity.com',
 }
 
 export const campuses: Campus[] = [

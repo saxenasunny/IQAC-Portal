@@ -52,7 +52,7 @@ export function LoginPage() {
       </div>
       <div className="flex items-center justify-center p-6">
         <Card className="w-full max-w-md p-8">
-          <p className="text-xs uppercase tracking-[0.2em] text-gold-600">Apex University</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-gold-600">{catalog.institution.name}</p>
           <h2 className="mt-2 text-2xl font-semibold text-navy-900">IQAC Data Management Portal</h2>
           <p className="mt-1 text-sm text-navy-500">Sign in with your institutional account.</p>
           <form className="mt-6 space-y-4" onSubmit={onSubmit}>
