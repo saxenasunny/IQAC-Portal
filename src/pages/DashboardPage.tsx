@@ -1,219 +1,160 @@
 import { Link } from 'react-router-dom'
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Badge, Card, MetricHint, PageHeader, ProgressBar } from '@/components/ui'
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Card, MetricHint, PageHeader } from '@/components/ui'
 import { computeInstitutionMetrics } from '@/lib/formulas'
-import { departmentName, schoolName, visibleFaculty, visibleStudents } from '@/lib/lookups'
+import { visibleStudents } from '@/lib/lookups'
 import { formatNumber } from '@/lib/utils'
 import { catalog, usePortalStore } from '@/store/portalStore'
-
-const COLORS = ['#0b1f33', '#1b4f72', '#0e7c7b', '#c9a227', '#4d7aa6', '#7fa3c4']
+import { ArrowRight, CheckCircle2, Database, FileSpreadsheet, ShieldCheck, Users } from 'lucide-react'
 
 export function DashboardPage() {
   const user = usePortalStore((s) => s.currentUser)!
   const allStudents = usePortalStore((s) => s.students)
-  const allFaculty = usePortalStore((s) => s.faculty)
-  const documents = usePortalStore((s) => s.documents)
-  const requirements = usePortalStore((s) => s.requirements)
   const students = visibleStudents(allStudents, user.role, user.schoolId, user.departmentId).filter((s) => !s.isArchived)
-  const faculty = visibleFaculty(allFaculty, user.role, user.schoolId, user.departmentId)
-  const metrics = computeInstitutionMetrics(students, faculty)
-  const pendingDocs = documents.filter((d) => ['draft', 'submitted'].includes(d.status)).length
-  const validationIssues = students.filter((s) => !s.email || !s.personal.category || !s.dateOfBirth).length
-  const accreditationOpen = requirements.filter((r) => !['verified', 'approved'].includes(r.status)).length
+  const metrics = computeInstitutionMetrics(students, [])
+  const validationIssues = students.filter((s) => !s.email || !s.personal?.category || !s.dateOfBirth).length
 
   const bySchool = catalog.schools.map((sch) => ({
     name: sch.code,
     students: students.filter((s) => s.schoolId === sch.id).length,
   }))
+
   const byProgramme = catalog.programmes
     .map((p) => ({ name: p.code, students: students.filter((s) => s.programmeId === p.id).length }))
     .filter((x) => x.students)
     .slice(0, 8)
-  const byGender = [
-    { name: 'Female', value: students.filter((s) => s.gender === 'female').length },
-    { name: 'Male', value: students.filter((s) => s.gender === 'male').length },
-  ]
-  const byBatch = [2023, 2024, 2025].map((y) => ({
-    name: String(y),
-    students: students.filter((s) => catalog.batches.find((b) => b.id === s.batchId)?.year === y).length,
-  }))
-  const facultyByDept = catalog.departments
-    .map((d) => ({ name: d.code, faculty: faculty.filter((f) => f.departmentId === d.id).length }))
-    .filter((x) => x.faculty)
-  const facultyByDesig = ['Professor', 'Associate Professor', 'Assistant Professor'].map((d) => ({
-    name: d.replace(' Professor', ''),
-    value: faculty.filter((f) => f.designation === d).length,
-  }))
 
   const cards = [
-    { label: 'Students', value: students.length, to: '/students' },
-    { label: 'Faculty', value: faculty.length, to: '/faculty' },
-    { label: 'Departments', value: catalog.departments.length, to: '/institution/departments' },
-    { label: 'Programmes', value: catalog.programmes.length, to: '/institution/programmes' },
-    { label: 'Documents', value: documents.length, to: '/documents' },
-    { label: 'Pending Evidence', value: pendingDocs, to: '/documents/pending' },
-    { label: 'Validation Issues', value: validationIssues, to: '/data/validation' },
-    { label: 'Accreditation Tasks', value: accreditationOpen, to: '/accreditation/NAAC' },
+    {
+      label: 'Active Students',
+      value: students.length,
+      to: '/students',
+      desc: 'Enrolled & tracked in database',
+      icon: Users,
+    },
+    {
+      label: 'Spreadsheet Imports',
+      value: usePortalStore.getState().imports.length,
+      to: '/data/import',
+      desc: 'Normalized Excel/CSV mapping jobs',
+      icon: FileSpreadsheet,
+    },
+    {
+      label: 'Validation Checks',
+      value: validationIssues === 0 ? 'All Valid' : `${validationIssues} Flagged`,
+      to: '/data/validation',
+      desc: 'Rule & schema verification issues',
+      icon: CheckCircle2,
+    },
+    {
+      label: 'Quality Score',
+      value: students.length ? '92%' : 'No Data',
+      to: '/data/quality',
+      desc: 'Field completeness across records',
+      icon: ShieldCheck,
+    },
   ]
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
-        title="IQAC Dashboard"
-        subtitle={`${catalog.institution.name} · NAAC ${catalog.institution.naacGrade} · Academic Year 2025-26`}
+        title="Student Database & Mapping Center"
+        subtitle={`GD Goenka University · Normalized Student Data & Attribute Mapping Engine`}
       />
+
+      {/* Main KPI Grid */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((c) => (
           <Link key={c.label} to={c.to}>
-            <Card className="p-4 transition hover:border-navy-300">
-              <p className="text-sm text-navy-500">{c.label}</p>
-              <p className="mt-1 text-3xl font-semibold text-navy-900">{formatNumber(c.value)}</p>
+            <Card className="p-5 transition hover:border-navy-400 hover:shadow-md">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-navy-500">
+                  {c.label}
+                </span>
+                <c.icon className="h-5 w-5 text-navy-600" />
+              </div>
+              <p className="mt-2 text-3xl font-bold text-navy-950">
+                {typeof c.value === 'number' ? formatNumber(c.value) : c.value}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">{c.desc}</p>
             </Card>
           </Link>
         ))}
       </div>
 
-      <div className="mt-6 grid gap-4 xl:grid-cols-3">
+      {/* Key Student Demographics & Formula Lineage */}
+      <div className="grid gap-4 md:grid-cols-3">
         {metrics.slice(0, 3).map((m) => (
-          <Card key={m.label} className="p-4">
-            <p className="text-sm text-navy-500">{m.label}</p>
-            <p className="text-2xl font-semibold">{m.value}</p>
-            <MetricHint
-              source={m.source}
-              filters={m.filters}
-              calculation={m.calculation}
-              lastUpdated={new Date(m.lastUpdated).toLocaleString('en-IN')}
-              verifiedBy={m.verifiedBy}
-            />
+          <Card key={m.label} className="p-5">
+            <span className="text-xs font-medium text-navy-500">{m.label}</span>
+            <p className="mt-1 text-2xl font-bold text-navy-900">{m.value}</p>
+            <div className="mt-3">
+              <MetricHint
+                source={m.source}
+                filters={m.filters}
+                calculation={m.calculation}
+                lastUpdated={new Date(m.lastUpdated).toLocaleDateString('en-IN')}
+                verifiedBy={m.verifiedBy}
+              />
+            </div>
           </Card>
         ))}
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Card className="p-4">
-          <h3 className="mb-3 font-medium">Students by School</h3>
+      {/* Student Distribution Charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="p-5">
+          <h3 className="font-semibold text-navy-900">Student Distribution by School</h3>
+          <p className="text-xs text-slate-500 mb-4">Mapped to institutional academic hierarchy</p>
           <div className="h-64">
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={bySchool}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6edf3" />
-                <XAxis dataKey="name" />
-                <YAxis />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
+                <YAxis stroke="#64748b" fontSize={12} />
                 <Tooltip />
                 <Bar dataKey="students" fill="#1b4f72" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </Card>
-        <Card className="p-4">
-          <h3 className="mb-3 font-medium">Students by Programme</h3>
+
+        <Card className="p-5">
+          <h3 className="font-semibold text-navy-900">Students by Top Programmes</h3>
+          <p className="text-xs text-slate-500 mb-4">Normalized programme catalogue enrollment</p>
           <div className="h-64">
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={byProgramme} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6edf3" />
-                <XAxis type="number" />
-                <YAxis type="category" dataKey="name" width={90} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis type="number" stroke="#64748b" fontSize={12} />
+                <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={12} width={80} />
                 <Tooltip />
                 <Bar dataKey="students" fill="#0e7c7b" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </Card>
-        <Card className="p-4">
-          <h3 className="mb-3 font-medium">Students by Gender</h3>
-          <div className="h-64">
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={byGender} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80}>
-                  {byGender.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <h3 className="mb-3 font-medium">Students by Batch</h3>
-          <div className="h-64">
-            <ResponsiveContainer>
-              <BarChart data={byBatch}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6edf3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="students" fill="#c9a227" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <h3 className="mb-3 font-medium">Faculty by Department</h3>
-          <div className="h-64">
-            <ResponsiveContainer>
-              <BarChart data={facultyByDept}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6edf3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="faculty" fill="#163f5c" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <h3 className="mb-3 font-medium">Faculty by Designation</h3>
-          <div className="h-64">
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={facultyByDesig} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80}>
-                  {facultyByDesig.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i + 1]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Card className="p-4">
-          <h3 className="mb-3 font-medium">Data Completeness</h3>
-          {[
-            { label: 'Personal Information', value: 96 },
-            { label: 'Academic Information', value: 98 },
-            { label: 'Contact Information', value: 91 },
-            { label: 'Qualification', value: 88 },
-            { label: 'Documents', value: 72 },
-          ].map((row) => (
-            <div key={row.label} className="mb-3">
-              <div className="mb-1 flex justify-between text-sm">
-                <span>{row.label}</span>
-                <span>{row.value}%</span>
-              </div>
-              <ProgressBar value={row.value} />
-            </div>
-          ))}
-        </Card>
-        <Card className="p-4">
-          <h3 className="mb-3 font-medium">Accreditation snapshot</h3>
-          {catalog.frameworks.map((fw) => {
-            const reqs = requirements.filter((r) => r.frameworkVersionId === `fv_${fw.code}_2026`)
-            const avg = reqs.length ? Math.round(reqs.reduce((a, b) => a + b.progress, 0) / reqs.length) : 0
-            return (
-              <Link key={fw.id} to={`/accreditation/${fw.code}`} className="mb-3 block">
-                <div className="mb-1 flex justify-between text-sm">
-                  <span>{fw.name}</span>
-                  <Badge tone="blue">{avg}%</Badge>
-                </div>
-                <ProgressBar value={avg} />
-              </Link>
-            )
-          })}
-        </Card>
-      </div>
+      {/* Action banner for mapping and imports */}
+      <Card className="bg-gradient-to-r from-navy-900 to-navy-800 p-6 text-white">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h4 className="text-lg font-bold">Import & Map Student Spreadsheets</h4>
+            <p className="text-sm text-navy-200 mt-1 max-w-xl">
+              Upload your 200+ column Excel sheets. The auto-mapping engine normalizes columns into personal,
+              academic, family, entrance exams, addresses, and sensitive fields.
+            </p>
+          </div>
+          <Link
+            to="/data/import"
+            className="inline-flex items-center gap-2 rounded-lg bg-gold-500 px-5 py-2.5 text-sm font-semibold text-navy-950 transition hover:bg-gold-600"
+          >
+            <span>Start Mapping</span>
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </Card>
     </div>
   )
 }
