@@ -381,8 +381,8 @@ export function ImportPage() {
       const issues: ImportJob['errors'] = []
       if (!registrationId) issues.push({ row: idx + 2, severity: 'error', field: 'registrationId', message: 'Missing required field Registration ID' })
       if (!fullName) issues.push({ row: idx + 2, severity: 'error', field: 'fullName', message: 'Missing required field Name' })
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) issues.push({ row: idx + 2, severity: 'error', field: 'email', message: 'Invalid email' })
-      if (registrationId && seen.has(registrationId.toLowerCase())) issues.push({ row: idx + 2, severity: 'error', field: 'registrationId', message: 'Duplicate Registration ID in file' })
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) issues.push({ row: idx + 2, severity: 'warning', field: 'email', message: 'Invalid email' })
+      if (registrationId && seen.has(registrationId.toLowerCase())) issues.push({ row: idx + 2, severity: 'warning', field: 'registrationId', message: 'Duplicate Registration ID in file; latest row used' })
       if (registrationId) seen.add(registrationId.toLowerCase())
       const applicationNumber = get('applicationNumber')
         || cleanOptionalImportValue(existingStudent?.applicationNumber ?? '')
@@ -395,7 +395,7 @@ export function ImportPage() {
         && cleanOptionalImportValue(student.applicationNumber).toLowerCase() === applicationNumber.toLowerCase(),
       )
       if (applicationNumber && (seenApplicationNumbers.has(applicationNumber.toLowerCase()) || existingWithApplicationNumber)) {
-        issues.push({ row: idx + 2, severity: 'error', field: 'applicationNumber', message: `Duplicate Application Number "${applicationNumber}"` })
+        issues.push({ row: idx + 2, severity: 'warning', field: 'applicationNumber', message: `Duplicate Application Number "${applicationNumber}"` })
       }
       if (applicationNumber) seenApplicationNumbers.add(applicationNumber.toLowerCase())
       const existingWithUniversityRollNumber = students.find((student) =>
@@ -404,11 +404,11 @@ export function ImportPage() {
         && cleanOptionalImportValue(student.universityRollNumber).toLowerCase() === universityRollNumber.toLowerCase(),
       )
       if (universityRollNumber && (seenUniversityRollNumbers.has(universityRollNumber.toLowerCase()) || existingWithUniversityRollNumber)) {
-        issues.push({ row: idx + 2, severity: 'error', field: 'universityRollNumber', message: `Duplicate University Roll Number "${universityRollNumber}"` })
+        issues.push({ row: idx + 2, severity: 'warning', field: 'universityRollNumber', message: `Duplicate University Roll Number "${universityRollNumber}"` })
       }
       if (universityRollNumber) seenUniversityRollNumbers.add(universityRollNumber.toLowerCase())
       const programme = findProgrammeMatch(programmeName)
-      if (programmeName && !programme) issues.push({ row: idx + 2, severity: 'error', field: 'programme', message: `Unknown programme: ${programmeName}` })
+      if (programmeName && !programme) issues.push({ row: idx + 2, severity: 'warning', field: 'programme', message: `Unrecognized programme: "${programmeName}"; mapping will assign institutional programme.` })
       const departmentName = get('department')
       const normalizedDept = normalizeImportValue(departmentName)
       const department = departmentName
@@ -486,7 +486,7 @@ export function ImportPage() {
       const academicStatuses: Student['academicStatus'][] = ['regular', 'lateral', 're_admitted', 'detained']
       const academicStatus = academicStatuses.find((status) => status === academicStatusValue)
       if (academicStatusValue && !academicStatus) issues.push({ row: idx + 2, severity: 'warning', field: 'academicStatus', message: `Unrecognized academic status "${get('academicStatus')}"; keeping the existing status or using regular` })
-      if (!registrationId || !fullName || issues.some((i) => i.severity === 'error')) {
+      if (!registrationId || !fullName) {
         errors.push(...issues)
         return
       }

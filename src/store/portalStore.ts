@@ -207,21 +207,22 @@ export const usePortalStore = create<PortalState>()(
         })
       },
       commitImportStudents: (rows, jobId) => {
-        const existingByReg = new Map(get().students.map((s) => [s.registrationId.toLowerCase(), s]))
+        const nextMap = new Map<string, Student>()
+        get().students.forEach((s) => nextMap.set(s.registrationId.toLowerCase(), s))
         let created = 0
         let updated = 0
-        const next = [...get().students]
         for (const row of rows) {
-          const found = existingByReg.get(row.registrationId.toLowerCase())
-          if (found) {
-            const idx = next.findIndex((s) => s.id === found.id)
-            next[idx] = { ...found, ...row, id: found.id, updatedAt: new Date().toISOString() }
+          const key = row.registrationId.toLowerCase()
+          const existing = nextMap.get(key)
+          if (existing) {
+            nextMap.set(key, { ...existing, ...row, id: existing.id, updatedAt: new Date().toISOString() })
             updated += 1
           } else {
-            next.unshift(row)
+            nextMap.set(key, row)
             created += 1
           }
         }
+        const next = [...nextMap.values()]
         set({
           students: next,
           imports: get().imports.map((j) =>

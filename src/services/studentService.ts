@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 
 type Row = Record<string, unknown>
 
-const STUDENT_IMPORT_BATCH_SIZE = 25
+const STUDENT_IMPORT_BATCH_SIZE = 50
 
 const STUDENT_STATUSES: Student['studentStatus'][] = [
   'active',
@@ -217,10 +217,22 @@ function toImportRow(student: Student): Row {
 export const studentService = {
   async listPortal(): Promise<Student[]> {
     if (!supabase) throw new Error('Supabase is not configured.')
-    const { data, error } = await supabase.rpc('list_portal_students')
-    if (error) throw error
-    if (!Array.isArray(data)) throw new Error('Supabase returned an invalid student list.')
-    return data.map(mapStudent)
+    const allStudents: Student[] = []
+    const PAGE_SIZE = 1000
+    let from = 0
+
+    while (true) {
+      const { data, error } = await supabase
+        .rpc('list_portal_students')
+        .range(from, from + PAGE_SIZE - 1)
+
+      if (error) throw error
+      if (!Array.isArray(data) || data.length === 0) break
+      allStudents.push(...data.map(mapStudent))
+      if (data.length < PAGE_SIZE) break
+      from += PAGE_SIZE
+    }
+    return allStudents
   },
 
   async commitImport(
