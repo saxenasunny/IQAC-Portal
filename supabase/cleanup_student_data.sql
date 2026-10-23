@@ -4,4 +4,4 @@
 -- will automatically cascade delete.
 
 delete from public.students;
-delete from public.imports where file_type = 'students';
+delete from public.imports where entity = 'students';

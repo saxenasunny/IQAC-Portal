@@ -57,19 +57,17 @@ begin
   end if;
 
   insert into public.imports (
+    entity,
     file_name,
-    file_type,
     total_rows,
     valid_rows,
-    error_rows,
     status,
-    field_mapping,
-    created_by
+    mapping,
+    uploaded_by
   ) values (
-    p_file_name,
     'students',
+    p_file_name,
     coalesce(jsonb_array_length(p_rows), 0),
-    0,
     0,
     'processing',
     coalesce(p_mapping, '{}'::jsonb),
@@ -370,7 +368,11 @@ begin
   end loop;
 
   update public.imports
-  set status = 'committed'
+  set status = 'committed',
+      new_count = v_created,
+      updated_count = v_updated,
+      valid_rows = v_created + v_updated,
+      committed_at = now()
   where id = v_import_id;
 
   return jsonb_build_object(
