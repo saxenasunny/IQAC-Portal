@@ -1,14 +1,78 @@
--- Migration 0013: Fix student import confirmation and align both 3-param and 4-param commit RPCs
+-- Migration 0013: Complete and bulletproof student import, schema alignment, and resilient constraints
 
--- 1. Ensure student_personal table has title column
+-- 1. Ensure required columns exist across tables
+alter table public.students
+  add column if not exists quota text;
+
 alter table public.student_personal
   add column if not exists title text;
 
--- 2. Ensure student_sensitive has additional_identifiers column
 alter table public.student_sensitive
   add column if not exists additional_identifiers jsonb not null default '{}'::jsonb;
 
--- 3. Core 3-parameter commit_student_import function
+-- 2. Drop unique constraints that break bulk imports on duplicate/placeholder values (e.g. 'NA', '-', '0')
+-- Only registration_id is the primary unique identifier for students.
+alter table public.students drop constraint if exists students_application_number_key;
+alter table public.students drop constraint if exists students_university_roll_number_key;
+
+-- 3. Ensure student_status enum has all institutional values
+alter type public.student_status add value if not exists 'ng_alumni';
+alter type public.student_status add value if not exists 'nep_exit';
+alter type public.student_status add value if not exists 'repeat';
+
+-- 4. Safe casting functions that never throw errors on dirty data
+create or replace function public.try_cast_date(p_value text)
+returns date
+language plpgsql
+immutable
+as $$
+begin
+  if p_value is null or btrim(p_value) = '' or p_value ~* '^(na|n/a|null|nil|-)$' then
+    return null;
+  end if;
+  return p_value::date;
+exception when others then
+  return null;
+end;
+$$;
+
+create or replace function public.try_cast_numeric(p_value text)
+returns numeric
+language plpgsql
+immutable
+as $$
+begin
+  if p_value is null or btrim(p_value) = '' or p_value ~* '^(na|n/a|null|nil|-)$' then
+    return null;
+  end if;
+  return regexp_replace(p_value, '[^0-9.-]', '', 'g')::numeric;
+exception when others then
+  return null;
+end;
+$$;
+
+create or replace function public.try_cast_integer(p_value text, p_default integer default null)
+returns integer
+language plpgsql
+immutable
+as $$
+declare
+  v_clean text;
+begin
+  if p_value is null or btrim(p_value) = '' or p_value ~* '^(na|n/a|null|nil|-)$' then
+    return p_default;
+  end if;
+  v_clean := regexp_replace(p_value, '[^0-9.-]', '', 'g');
+  if v_clean = '' or v_clean = '-' or v_clean = '.' then
+    return p_default;
+  end if;
+  return v_clean::numeric::integer;
+exception when others then
+  return p_default;
+end;
+$$;
+
+-- 5. Core 3-parameter commit_student_import function
 create or replace function public.commit_student_import(
   p_file_name text,
   p_mapping jsonb,
@@ -44,6 +108,10 @@ declare
   v_prog_code text;
   v_dept_code text;
   v_sch_code text;
+  v_gender public.gender_type;
+  v_status public.student_status;
+  v_academic_status public.academic_status;
+  v_workflow public.workflow_status;
 begin
   select p.role into v_role
   from public.profiles p
@@ -77,6 +145,11 @@ begin
 
   for v_row in select * from jsonb_array_elements(coalesce(p_rows, '[]'::jsonb))
   loop
+    v_registration_id := nullif(btrim(v_row->>'registrationId'), '');
+    if v_registration_id is null then
+      continue;
+    end if;
+
     v_school_id := null;
     v_department_id := null;
     v_programme_id := null;
@@ -160,7 +233,7 @@ begin
       end if;
     end if;
 
-    v_batch_year := nullif(v_row->>'batchYear', '')::integer;
+    v_batch_year := public.try_cast_integer(v_row->>'batchYear', 2024);
     select b.id into v_batch_id
     from public.batches b
     where b.programme_id = v_programme_id
@@ -185,7 +258,6 @@ begin
       select id into v_academic_year_id from public.academic_years where is_current limit 1;
     end if;
 
-    v_registration_id := btrim(v_row->>'registrationId');
     perform pg_advisory_xact_lock(hashtextextended(lower(v_registration_id), 0));
     select s.id, s.registration_id
     into v_student_id, v_existing_registration_id
@@ -197,6 +269,49 @@ begin
       v_registration_id := v_existing_registration_id;
     end if;
 
+    -- Safe enum mappings
+    v_gender := case
+      when lower(coalesce(v_row->>'gender', '')) in ('male', 'm') then 'male'::public.gender_type
+      when lower(coalesce(v_row->>'gender', '')) in ('female', 'f') then 'female'::public.gender_type
+      when lower(coalesce(v_row->>'gender', '')) in ('other') then 'other'::public.gender_type
+      else 'prefer_not_to_say'::public.gender_type
+    end;
+
+    v_status := case lower(replace(replace(coalesce(v_row->>'studentStatus', ''), ' ', '_'), '.', ''))
+      when 'active' then 'active'::public.student_status
+      when 'inactive' then 'inactive'::public.student_status
+      when 'graduated' then 'graduated'::public.student_status
+      when 'alumni' then 'alumni'::public.student_status
+      when 'ng_alumni' then 'ng_alumni'::public.student_status
+      when 'ngalumni' then 'ng_alumni'::public.student_status
+      when 'nep_exit' then 'nep_exit'::public.student_status
+      when 'repeat' then 'repeat'::public.student_status
+      when 'withdrawn' then 'withdrawn'::public.student_status
+      when 'suspended' then 'suspended'::public.student_status
+      else 'active'::public.student_status
+    end;
+
+    v_academic_status := case lower(replace(coalesce(v_row->>'academicStatus', ''), ' ', '_'))
+      when 'regular' then 'regular'::public.academic_status
+      when 'lateral' then 'lateral'::public.academic_status
+      when 're_admitted' then 're_admitted'::public.academic_status
+      when 'detained' then 'detained'::public.academic_status
+      else 'regular'::public.academic_status
+    end;
+
+    v_workflow := case lower(replace(coalesce(v_row->>'workflow', ''), ' ', '_'))
+      when 'draft' then 'draft'::public.workflow_status
+      when 'under_review' then 'under_review'::public.workflow_status
+      when 'verified' then 'verified'::public.workflow_status
+      when 'approved' then 'approved'::public.workflow_status
+      when 'rejected' then 'rejected'::public.workflow_status
+      when 'needs_revision' then 'needs_revision'::public.workflow_status
+      when 'change_requested' then 'change_requested'::public.workflow_status
+      when 'revised' then 'revised'::public.workflow_status
+      when 're_verified' then 're_verified'::public.workflow_status
+      else 'submitted'::public.workflow_status
+    end;
+
     insert into public.students (
       registration_id, application_number, university_roll_number, full_name, email,
       phone, gender, date_of_birth, nationality, programme_id, department_id, school_id,
@@ -204,22 +319,22 @@ begin
       academic_status, admission_type, quota, workflow, is_archived
     ) values (
       v_registration_id,
-      nullif(v_row->>'applicationNumber', ''),
-      nullif(v_row->>'universityRollNumber', ''),
-      btrim(v_row->>'fullName'),
-      nullif(v_row->>'email', ''),
-      nullif(v_row->>'phone', ''),
-      coalesce(nullif(v_row->>'gender', '')::public.gender_type, 'prefer_not_to_say'),
-      nullif(v_row->>'dateOfBirth', '')::date,
-      coalesce(nullif(v_row->>'nationality', ''), 'India'),
+      nullif(btrim(coalesce(v_row->>'applicationNumber', '')), ''),
+      nullif(btrim(coalesce(v_row->>'universityRollNumber', '')), ''),
+      coalesce(nullif(btrim(v_row->>'fullName'), ''), 'Student ' || v_registration_id),
+      nullif(btrim(coalesce(v_row->>'email', '')), ''),
+      nullif(btrim(coalesce(v_row->>'phone', '')), ''),
+      v_gender,
+      public.try_cast_date(v_row->>'dateOfBirth'),
+      coalesce(nullif(btrim(v_row->>'nationality'), ''), 'India'),
       v_programme_id, v_department_id, v_school_id, v_batch_id, v_academic_year_id,
-      coalesce(nullif(v_row->>'currentYear', '')::integer, 1),
-      coalesce(nullif(v_row->>'currentTerm', ''), 'Term 1'),
-      coalesce(nullif(v_row->>'studentStatus', '')::public.student_status, 'active'),
-      coalesce(nullif(v_row->>'academicStatus', '')::public.academic_status, 'regular'),
-      coalesce(nullif(v_row->>'admissionType', ''), 'General'),
-      nullif(v_row->>'quota', ''),
-      coalesce(nullif(v_row->>'workflow', '')::public.workflow_status, 'submitted'),
+      public.try_cast_integer(v_row->>'currentYear', 1),
+      coalesce(nullif(btrim(v_row->>'currentTerm'), ''), 'Term 1'),
+      v_status,
+      v_academic_status,
+      coalesce(nullif(btrim(v_row->>'admissionType'), ''), 'General'),
+      nullif(btrim(coalesce(v_row->>'quota', '')), ''),
+      v_workflow,
       coalesce((v_row->>'isArchived')::boolean, false)
     )
     on conflict (registration_id) do update set
@@ -228,7 +343,7 @@ begin
       full_name = excluded.full_name,
       email = coalesce(excluded.email, public.students.email),
       phone = coalesce(excluded.phone, public.students.phone),
-      gender = coalesce(excluded.gender, public.students.gender),
+      gender = excluded.gender,
       date_of_birth = coalesce(excluded.date_of_birth, public.students.date_of_birth),
       nationality = coalesce(excluded.nationality, public.students.nationality),
       programme_id = excluded.programme_id,
@@ -260,18 +375,18 @@ begin
       domicile_state, category
     ) values (
       v_student_id,
-      coalesce(v_personal->>'firstName', split_part(btrim(v_row->>'fullName'), ' ', 1)),
-      nullif(v_personal->>'middleName', ''),
-      coalesce(nullif(v_personal->>'lastName', ''), ''),
-      nullif(v_personal->>'title', ''),
-      nullif(v_personal->>'religion', ''),
-      nullif(v_personal->>'bloodGroup', ''),
-      nullif(v_personal->>'motherTongue', ''),
+      coalesce(nullif(btrim(v_personal->>'firstName'), ''), split_part(btrim(v_row->>'fullName'), ' ', 1)),
+      nullif(btrim(v_personal->>'middleName'), ''),
+      coalesce(nullif(btrim(v_personal->>'lastName'), ''), ''),
+      nullif(btrim(v_personal->>'title'), ''),
+      nullif(btrim(v_personal->>'religion'), ''),
+      nullif(btrim(v_personal->>'bloodGroup'), ''),
+      nullif(btrim(v_personal->>'motherTongue'), ''),
       coalesce((v_personal->>'firstGeneration')::boolean, false),
       coalesce((v_personal->>'differentlyAbled')::boolean, false),
       coalesce((v_personal->>'ews')::boolean, false),
-      coalesce(nullif(v_personal->>'domicileState', ''), 'Rajasthan'),
-      coalesce(nullif(v_personal->>'category', ''), 'General')
+      coalesce(nullif(btrim(v_personal->>'domicileState'), ''), 'Rajasthan'),
+      coalesce(nullif(btrim(v_personal->>'category'), ''), 'General')
     )
     on conflict (student_id) do update set
       first_name = coalesce(excluded.first_name, public.student_personal.first_name),
@@ -292,11 +407,11 @@ begin
       student_id, cgpa, percentage, backlogs, admission_date, expected_graduation
     ) values (
       v_student_id,
-      nullif(v_academic->>'cgpa', '')::numeric,
-      nullif(v_academic->>'percentage', '')::numeric,
-      coalesce(nullif(v_academic->>'backlogs', '')::integer, 0),
-      nullif(v_academic->>'admissionDate', '')::date,
-      nullif(v_academic->>'expectedGraduation', '')::date
+      public.try_cast_numeric(v_academic->>'cgpa'),
+      public.try_cast_numeric(v_academic->>'percentage'),
+      public.try_cast_integer(v_academic->>'backlogs', 0),
+      public.try_cast_date(v_academic->>'admissionDate'),
+      public.try_cast_date(v_academic->>'expectedGraduation')
     )
     on conflict (student_id) do update set
       cgpa = coalesce(excluded.cgpa, public.student_academic.cgpa),
@@ -310,10 +425,10 @@ begin
       student_id, personal_email, alternate_phone, emergency_contact_name, emergency_contact_phone
     ) values (
       v_student_id,
-      nullif(v_contact->>'personalEmail', ''),
-      nullif(v_contact->>'alternatePhone', ''),
-      nullif(v_contact->>'emergencyContactName', ''),
-      nullif(v_contact->>'emergencyContactPhone', '')
+      nullif(btrim(v_contact->>'personalEmail'), ''),
+      nullif(btrim(v_contact->>'alternatePhone'), ''),
+      nullif(btrim(v_contact->>'emergencyContactName'), ''),
+      nullif(btrim(v_contact->>'emergencyContactPhone'), '')
     )
     on conflict (student_id) do update set
       personal_email = coalesce(excluded.personal_email, public.student_contact.personal_email),
@@ -326,11 +441,11 @@ begin
       student_id, father_name, father_occupation, mother_name, mother_occupation, annual_income
     ) values (
       v_student_id,
-      nullif(v_family->>'fatherName', ''),
-      nullif(v_family->>'fatherOccupation', ''),
-      nullif(v_family->>'motherName', ''),
-      nullif(v_family->>'motherOccupation', ''),
-      nullif(v_family->>'annualIncome', '')::numeric
+      nullif(btrim(v_family->>'fatherName'), ''),
+      nullif(btrim(v_family->>'fatherOccupation'), ''),
+      nullif(btrim(v_family->>'motherName'), ''),
+      nullif(btrim(v_family->>'motherOccupation'), ''),
+      public.try_cast_numeric(v_family->>'annualIncome')
     )
     on conflict (student_id) do update set
       father_name = coalesce(excluded.father_name, public.student_family.father_name),
@@ -344,11 +459,11 @@ begin
       student_id, aadhaar, pan, bank_account, ifsc, abc_id, additional_identifiers
     ) values (
       v_student_id,
-      nullif(v_sensitive->>'aadhaar', ''),
-      nullif(v_sensitive->>'pan', ''),
-      nullif(v_sensitive->>'bankAccount', ''),
-      nullif(v_sensitive->>'ifsc', ''),
-      nullif(v_sensitive->>'abcId', ''),
+      nullif(btrim(v_sensitive->>'aadhaar'), ''),
+      nullif(btrim(v_sensitive->>'pan'), ''),
+      nullif(btrim(v_sensitive->>'bankAccount'), ''),
+      nullif(btrim(v_sensitive->>'ifsc'), ''),
+      nullif(btrim(v_sensitive->>'abcId'), ''),
       coalesce(v_sensitive->'additionalIdentifiers', '{}'::jsonb)
     )
     on conflict (student_id) do update set
@@ -387,7 +502,7 @@ $$;
 revoke all on function public.commit_student_import(text, jsonb, jsonb) from public;
 grant execute on function public.commit_student_import(text, jsonb, jsonb) to authenticated;
 
--- 4. Overload with 4 parameters (for sensitive / protected identifier batches)
+-- 6. Overload with 4 parameters (for sensitive / protected identifier batches)
 create or replace function public.commit_student_import(
   p_file_name text,
   p_mapping jsonb,
@@ -459,3 +574,97 @@ $$;
 
 revoke all on function public.commit_student_import(text, jsonb, jsonb, jsonb) from public;
 grant execute on function public.commit_student_import(text, jsonb, jsonb, jsonb) to authenticated;
+
+-- 7. Update list_portal_students to order deterministically by registration_id
+create or replace function public.list_portal_students()
+returns setof jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_role public.user_role;
+begin
+  select p.role into v_role
+  from public.profiles p
+  where p.id = auth.uid() and p.is_active;
+
+  if v_role is null then
+    raise exception 'An active Supabase profile is required to view student data.';
+  end if;
+
+  return query
+  select
+    coalesce(pd.data, '{}'::jsonb) ||
+    jsonb_build_object(
+      'id', s.id::text,
+      'registrationId', s.registration_id,
+      'applicationNumber', coalesce(s.application_number, ''),
+      'universityRollNumber', coalesce(s.university_roll_number, ''),
+      'fullName', s.full_name,
+      'email', coalesce(s.email, ''),
+      'phone', coalesce(s.phone, ''),
+      'gender', coalesce(s.gender::text, 'prefer_not_to_say'),
+      'dateOfBirth', coalesce(s.date_of_birth::text, ''),
+      'nationality', coalesce(s.nationality, 'India'),
+      'programmeCode', p.code,
+      'departmentCode', d.code,
+      'schoolCode', sc.code,
+      'batchYear', b.year,
+      'academicYearLabel', ay.label,
+      'currentYear', coalesce(s.current_year, 1),
+      'currentTerm', coalesce(s.current_term, ''),
+      'studentStatus', s.student_status::text,
+      'academicStatus', s.academic_status::text,
+      'admissionType', coalesce(s.admission_type, ''),
+      'quota', coalesce(s.quota, ''),
+      'workflow', s.workflow::text,
+      'isArchived', s.is_archived,
+      'createdAt', s.created_at::text,
+      'updatedAt', s.updated_at::text
+    ) ||
+    case
+      when v_role in ('super_admin', 'iqac_admin', 'registrar', 'data_entry', 'verifier') then
+        jsonb_build_object(
+          'sensitive',
+          jsonb_strip_nulls(jsonb_build_object(
+            'aadhaar', ss.aadhaar,
+            'pan', ss.pan,
+            'bankAccount', ss.bank_account,
+            'ifsc', ss.ifsc,
+            'abcId', ss.abc_id,
+            'additionalIdentifiers', nullif(ss.additional_identifiers, '{}'::jsonb)
+          ))
+        ) ||
+        jsonb_build_object(
+          'family',
+          coalesce(pd.data->'family', '{}'::jsonb) ||
+          jsonb_build_object('annualIncome', sf.annual_income)
+        )
+      else '{}'::jsonb
+    end
+  from public.students s
+  left join public.programmes p on p.id = s.programme_id
+  left join public.departments d on d.id = s.department_id
+  left join public.schools sc on sc.id = d.school_id
+  left join public.batches b on b.id = s.batch_id
+  left join public.academic_years ay on ay.id = s.academic_year_id
+  left join public.student_portal_data pd on pd.student_id = s.id
+  left join public.student_sensitive ss on ss.student_id = s.id
+  left join public.student_family sf on sf.student_id = s.id
+  where
+    v_role in ('super_admin', 'iqac_admin', 'registrar', 'iqac_viewer', 'auditor', 'verifier', 'data_entry')
+    or (
+      v_role = 'dean'
+      and s.school_id = (select profile.school_id from public.profiles profile where profile.id = auth.uid())
+    )
+    or (
+      v_role in ('hod', 'faculty')
+      and s.department_id = (select profile.department_id from public.profiles profile where profile.id = auth.uid())
+    )
+  order by s.registration_id;
+end;
+$$;
+
+revoke all on function public.list_portal_students() from public;
+grant execute on function public.list_portal_students() to authenticated;

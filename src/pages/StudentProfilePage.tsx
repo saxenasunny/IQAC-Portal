@@ -176,11 +176,20 @@ export function StudentProfilePage() {
   )
 }
 
-function Item({ label, value }: { label: string; value: string | number }) {
+function Item({ label, value }: { label: string; value: React.ReactNode }) {
+  const isMissing = value === undefined || value === null || value === '' || value === '—'
   return (
     <div>
-      <dt className="text-navy-400">{label}</dt>
-      <dd className="font-medium capitalize">{value}</dd>
+      <dt className="text-navy-400 text-xs">{label}</dt>
+      <dd className="font-medium mt-0.5">
+        {isMissing ? (
+          <span className="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60">
+            Missing
+          </span>
+        ) : (
+          value
+        )}
+      </dd>
     </div>
   )
 }
