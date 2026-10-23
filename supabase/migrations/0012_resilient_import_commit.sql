@@ -3,6 +3,9 @@
 alter table public.student_personal
   add column if not exists title text;
 
+alter table public.student_sensitive
+  add column if not exists additional_identifiers jsonb not null default '{}'::jsonb;
+
 create or replace function public.commit_student_import(
   p_file_name text,
   p_mapping jsonb,
@@ -49,44 +52,49 @@ begin
   if v_role not in ('super_admin', 'iqac_admin', 'registrar', 'data_entry', 'verifier') then
     raise exception 'Your role is not authorized to import student data.';
   end if;
-  if jsonb_typeof(p_rows) is distinct from 'array' then
-    raise exception 'The import rows must be supplied as an array.';
-  end if;
-  if jsonb_array_length(p_rows) = 0 then
-    raise exception 'The import must contain at least one valid student row.';
-  end if;
 
   insert into public.imports (
-    entity, file_name, status, total_rows, valid_rows, mapping, uploaded_by, committed_at
+    file_name,
+    file_type,
+    total_rows,
+    valid_rows,
+    error_rows,
+    status,
+    field_mapping,
+    created_by
   ) values (
-    'students', p_file_name, 'committed', jsonb_array_length(p_rows),
-    jsonb_array_length(p_rows), coalesce(p_mapping, '{}'::jsonb), auth.uid(), now()
+    p_file_name,
+    'students',
+    coalesce(jsonb_array_length(p_rows), 0),
+    0,
+    0,
+    'processing',
+    coalesce(p_mapping, '{}'::jsonb),
+    auth.uid()
   )
   returning id into v_import_id;
 
-  for v_row in select value from jsonb_array_elements(p_rows)
+  for v_row in select * from jsonb_array_elements(coalesce(p_rows, '[]'::jsonb))
   loop
-    if nullif(btrim(v_row->>'registrationId'), '') is null
-      or nullif(btrim(v_row->>'fullName'), '') is null then
-      raise exception 'Every imported row must include a registration ID and student name.';
-    end if;
+    v_school_id := null;
+    v_department_id := null;
+    v_programme_id := null;
+    v_batch_id := null;
 
     v_prog_code := nullif(btrim(v_row->>'programmeCode'), '');
     v_dept_code := nullif(btrim(v_row->>'departmentCode'), '');
     v_sch_code := nullif(btrim(v_row->>'schoolCode'), '');
 
-    v_programme_id := null;
-    v_department_id := null;
-    v_school_id := null;
-
-    -- 1. Try exact 3-way join match
+    -- 1. Precise 3-level match
     if v_prog_code is not null then
       select p.id, d.id, sc.id
       into v_programme_id, v_department_id, v_school_id
       from public.programmes p
       join public.departments d on d.id = p.department_id
       join public.schools sc on sc.id = d.school_id
-      where p.code = v_prog_code
+      where (lower(p.code) = lower(v_prog_code) or lower(p.name) = lower(v_prog_code))
+        and (v_dept_code is null or lower(d.code) = lower(v_dept_code) or lower(d.name) = lower(v_dept_code))
+        and (v_sch_code is null or lower(sc.code) = lower(v_sch_code) or lower(sc.name) = lower(v_sch_code))
       limit 1;
     end if;
 
@@ -97,7 +105,19 @@ begin
       from public.programmes p
       join public.departments d on d.id = p.department_id
       join public.schools sc on sc.id = d.school_id
-      where lower(p.code) = lower(v_prog_code)
+      where lower(p.code) = lower(v_prog_code) or lower(p.name) = lower(v_prog_code)
+      limit 1;
+    end if;
+
+    -- 2b. Try matching without special characters
+    if v_programme_id is null and v_prog_code is not null then
+      select p.id, d.id, sc.id
+      into v_programme_id, v_department_id, v_school_id
+      from public.programmes p
+      join public.departments d on d.id = p.department_id
+      join public.schools sc on sc.id = d.school_id
+      where lower(regexp_replace(p.name, '[^a-zA-Z0-9]+', '', 'g')) = lower(regexp_replace(v_prog_code, '[^a-zA-Z0-9]+', '', 'g'))
+         or lower(regexp_replace(p.code, '[^a-zA-Z0-9]+', '', 'g')) = lower(regexp_replace(v_prog_code, '[^a-zA-Z0-9]+', '', 'g'))
       limit 1;
     end if;
 
@@ -152,7 +172,8 @@ begin
       select ay.id into v_academic_year_id from public.academic_years ay order by ay.start_date desc limit 1;
       insert into public.batches (id, programme_id, academic_year_id, year, label)
       values (v_batch_id, v_programme_id, v_academic_year_id, coalesce(v_batch_year, 2024), coalesce(v_prog_code, 'Batch') || ' ' || coalesce(v_batch_year::text, '2024'))
-      on conflict do nothing;
+      on conflict (programme_id, year) do update set label = excluded.label
+      returning id into v_batch_id;
     end if;
 
     select ay.id into v_academic_year_id
@@ -233,7 +254,7 @@ begin
 
     v_personal := coalesce(v_row->'personal', '{}'::jsonb);
     insert into public.student_personal (
-      student_id, first_name, middle_name, last_name, religion,
+      student_id, first_name, middle_name, last_name, title, religion,
       blood_group, mother_tongue, first_generation, differently_abled, ews,
       domicile_state, category
     ) values (
@@ -241,6 +262,7 @@ begin
       coalesce(v_personal->>'firstName', split_part(btrim(v_row->>'fullName'), ' ', 1)),
       nullif(v_personal->>'middleName', ''),
       coalesce(nullif(v_personal->>'lastName', ''), ''),
+      nullif(v_personal->>'title', ''),
       nullif(v_personal->>'religion', ''),
       nullif(v_personal->>'bloodGroup', ''),
       nullif(v_personal->>'motherTongue', ''),
@@ -251,17 +273,18 @@ begin
       coalesce(nullif(v_personal->>'category', ''), 'General')
     )
     on conflict (student_id) do update set
-      first_name = excluded.first_name,
-      middle_name = excluded.middle_name,
-      last_name = excluded.last_name,
-      religion = excluded.religion,
-      blood_group = excluded.blood_group,
-      mother_tongue = excluded.mother_tongue,
+      first_name = coalesce(excluded.first_name, public.student_personal.first_name),
+      middle_name = coalesce(excluded.middle_name, public.student_personal.middle_name),
+      last_name = coalesce(excluded.last_name, public.student_personal.last_name),
+      title = coalesce(excluded.title, public.student_personal.title),
+      religion = coalesce(excluded.religion, public.student_personal.religion),
+      blood_group = coalesce(excluded.blood_group, public.student_personal.blood_group),
+      mother_tongue = coalesce(excluded.mother_tongue, public.student_personal.mother_tongue),
       first_generation = excluded.first_generation,
       differently_abled = excluded.differently_abled,
       ews = excluded.ews,
-      domicile_state = excluded.domicile_state,
-      category = excluded.category;
+      domicile_state = coalesce(excluded.domicile_state, public.student_personal.domicile_state),
+      category = coalesce(excluded.category, public.student_personal.category);
 
     v_academic := coalesce(v_row->'academic', '{}'::jsonb);
     insert into public.student_academic (
@@ -271,15 +294,15 @@ begin
       nullif(v_academic->>'cgpa', '')::numeric,
       nullif(v_academic->>'percentage', '')::numeric,
       coalesce(nullif(v_academic->>'backlogs', '')::integer, 0),
-      coalesce(nullif(v_academic->>'admissionDate', '')::date, current_date),
+      nullif(v_academic->>'admissionDate', '')::date,
       nullif(v_academic->>'expectedGraduation', '')::date
     )
     on conflict (student_id) do update set
-      cgpa = excluded.cgpa,
-      percentage = excluded.percentage,
+      cgpa = coalesce(excluded.cgpa, public.student_academic.cgpa),
+      percentage = coalesce(excluded.percentage, public.student_academic.percentage),
       backlogs = excluded.backlogs,
-      admission_date = excluded.admission_date,
-      expected_graduation = excluded.expected_graduation;
+      admission_date = coalesce(excluded.admission_date, public.student_academic.admission_date),
+      expected_graduation = coalesce(excluded.expected_graduation, public.student_academic.expected_graduation);
 
     v_contact := coalesce(v_row->'contact', '{}'::jsonb);
     insert into public.student_contact (
@@ -292,10 +315,10 @@ begin
       nullif(v_contact->>'emergencyContactPhone', '')
     )
     on conflict (student_id) do update set
-      personal_email = excluded.personal_email,
-      alternate_phone = excluded.alternate_phone,
-      emergency_contact_name = excluded.emergency_contact_name,
-      emergency_contact_phone = excluded.emergency_contact_phone;
+      personal_email = coalesce(excluded.personal_email, public.student_contact.personal_email),
+      alternate_phone = coalesce(excluded.alternate_phone, public.student_contact.alternate_phone),
+      emergency_contact_name = coalesce(excluded.emergency_contact_name, public.student_contact.emergency_contact_name),
+      emergency_contact_phone = coalesce(excluded.emergency_contact_phone, public.student_contact.emergency_contact_phone);
 
     v_family := coalesce(v_row->'family', '{}'::jsonb);
     insert into public.student_family (
@@ -309,29 +332,31 @@ begin
       nullif(v_family->>'annualIncome', '')::numeric
     )
     on conflict (student_id) do update set
-      father_name = excluded.father_name,
-      father_occupation = excluded.father_occupation,
-      mother_name = excluded.mother_name,
-      mother_occupation = excluded.mother_occupation,
-      annual_income = excluded.annual_income;
+      father_name = coalesce(excluded.father_name, public.student_family.father_name),
+      father_occupation = coalesce(excluded.father_occupation, public.student_family.father_occupation),
+      mother_name = coalesce(excluded.mother_name, public.student_family.mother_name),
+      mother_occupation = coalesce(excluded.mother_occupation, public.student_family.mother_occupation),
+      annual_income = coalesce(excluded.annual_income, public.student_family.annual_income);
 
     v_sensitive := coalesce(v_row->'sensitive', '{}'::jsonb);
     insert into public.student_sensitive (
-      student_id, aadhaar, pan, bank_account, ifsc, abc_id
+      student_id, aadhaar, pan, bank_account, ifsc, abc_id, additional_identifiers
     ) values (
       v_student_id,
       nullif(v_sensitive->>'aadhaar', ''),
       nullif(v_sensitive->>'pan', ''),
       nullif(v_sensitive->>'bankAccount', ''),
       nullif(v_sensitive->>'ifsc', ''),
-      nullif(v_sensitive->>'abcId', '')
+      nullif(v_sensitive->>'abcId', ''),
+      coalesce(v_sensitive->'additionalIdentifiers', '{}'::jsonb)
     )
     on conflict (student_id) do update set
       aadhaar = coalesce(excluded.aadhaar, public.student_sensitive.aadhaar),
       pan = coalesce(excluded.pan, public.student_sensitive.pan),
       bank_account = coalesce(excluded.bank_account, public.student_sensitive.bank_account),
       ifsc = coalesce(excluded.ifsc, public.student_sensitive.ifsc),
-      abc_id = coalesce(excluded.abc_id, public.student_sensitive.abc_id);
+      abc_id = coalesce(excluded.abc_id, public.student_sensitive.abc_id),
+      additional_identifiers = coalesce(public.student_sensitive.additional_identifiers, '{}'::jsonb) || coalesce(excluded.additional_identifiers, '{}'::jsonb);
 
     v_portal_data := v_row - 'sensitive' - 'programmeCode' - 'departmentCode' - 'schoolCode' - 'batchYear' - 'academicYearLabel';
     insert into public.student_portal_data (student_id, data, updated_at)
@@ -348,6 +373,7 @@ begin
   return jsonb_build_object(
     'created', v_created,
     'updated', v_updated,
+    'import_id', v_import_id,
     'importId', v_import_id
   );
 end;
@@ -355,3 +381,76 @@ $$;
 
 revoke all on function public.commit_student_import(text, jsonb, jsonb) from public;
 grant execute on function public.commit_student_import(text, jsonb, jsonb) to authenticated;
+
+-- 4. Overload with 4 parameters (for sensitive / protected identifier batches)
+create or replace function public.commit_student_import(
+  p_file_name text,
+  p_mapping jsonb,
+  p_rows jsonb,
+  p_sensitive_rows jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_role public.user_role;
+  v_item jsonb;
+  v_identifiers jsonb;
+  v_registration_id text;
+  v_student_id uuid;
+  v_result jsonb;
+begin
+  if jsonb_typeof(coalesce(p_sensitive_rows, '[]'::jsonb)) <> 'array' then
+    raise exception 'Protected import attributes must be an array.';
+  end if;
+
+  select p.role into v_role
+  from public.profiles p
+  where p.id = auth.uid() and p.is_active;
+
+  if v_role is null or v_role not in ('super_admin', 'iqac_admin', 'registrar', 'data_entry', 'verifier') then
+    raise exception 'Your role is not authorized to import student data.';
+  end if;
+
+  -- 1. Run core import via 3-param overload
+  v_result := public.commit_student_import(p_file_name, p_mapping, p_rows);
+
+  -- 2. Process sensitive / protected identifiers
+  for v_item in
+    select item
+    from jsonb_array_elements(coalesce(p_sensitive_rows, '[]'::jsonb)) as items(item)
+  loop
+    v_registration_id := nullif(btrim(v_item->>'registrationId'), '');
+    v_identifiers := v_item->'identifiers';
+    if v_registration_id is null or jsonb_typeof(v_identifiers) <> 'object' then
+      continue;
+    end if;
+    if v_identifiers = '{}'::jsonb then
+      continue;
+    end if;
+
+    select s.id into v_student_id
+    from public.students s
+    where lower(s.registration_id) = lower(v_registration_id);
+    
+    if v_student_id is not null then
+      insert into public.student_sensitive as existing (student_id, additional_identifiers)
+      values (v_student_id, v_identifiers)
+      on conflict (student_id) do update
+        set additional_identifiers = coalesce(existing.additional_identifiers, '{}'::jsonb) || excluded.additional_identifiers;
+    end if;
+  end loop;
+
+  return jsonb_build_object(
+    'created', coalesce((v_result->>'created')::integer, 0),
+    'updated', coalesce((v_result->>'updated')::integer, 0),
+    'import_id', coalesce(v_result->>'import_id', v_result->>'importId'),
+    'importId', coalesce(v_result->>'importId', v_result->>'import_id')
+  );
+end;
+$$;
+
+revoke all on function public.commit_student_import(text, jsonb, jsonb, jsonb) from public;
+grant execute on function public.commit_student_import(text, jsonb, jsonb, jsonb) to authenticated;

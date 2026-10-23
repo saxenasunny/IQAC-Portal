@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 
 type Row = Record<string, unknown>
 
-const STUDENT_IMPORT_BATCH_SIZE = 10
+const STUDENT_IMPORT_BATCH_SIZE = 25
 
 const STUDENT_STATUSES: Student['studentStatus'][] = [
   'active',
@@ -262,15 +262,14 @@ export const studentService = {
       }
 
       const result = object(data)
-      if (
-        typeof result.created !== 'number'
-        || typeof result.updated !== 'number'
-        || typeof result.import_id !== 'string'
-      ) {
+      const createdCount = typeof result.created === 'number' ? result.created : (typeof result.newCount === 'number' ? result.newCount : null)
+      const updatedCount = typeof result.updated === 'number' ? result.updated : (typeof result.updatedCount === 'number' ? result.updatedCount : null)
+
+      if (createdCount === null || updatedCount === null) {
         throw new Error(`${completedRows} of ${students.length} valid rows were saved, but Supabase did not confirm batch rows ${offset + 1}-${offset + batch.length}.`)
       }
-      created += result.created
-      updated += result.updated
+      created += createdCount
+      updated += updatedCount
       completedRows += batch.length
       onBatchSaved?.(batch, { created, updated })
     }
