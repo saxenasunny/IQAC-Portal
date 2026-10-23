@@ -66,7 +66,7 @@ begin
     p_file_name,
     coalesce(jsonb_array_length(p_rows), 0),
     0,
-    'processing',
+    'uploaded',
     coalesce(p_mapping, '{}'::jsonb),
     auth.uid()
   )

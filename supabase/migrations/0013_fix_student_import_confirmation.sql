@@ -69,7 +69,7 @@ begin
     p_file_name,
     coalesce(jsonb_array_length(p_rows), 0),
     0,
-    'processing',
+    'uploaded',
     coalesce(p_mapping, '{}'::jsonb),
     auth.uid()
   )
@@ -110,7 +110,7 @@ begin
       limit 1;
     end if;
 
-    -- 2b. Try matching without special characters
+    -- 2b. Match without special characters
     if v_programme_id is null and v_prog_code is not null then
       select p.id, d.id, sc.id
       into v_programme_id, v_department_id, v_school_id
