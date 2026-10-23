@@ -1,8 +1,12 @@
 -- Migration 0012: Robust auto-resolution of programme, department, and school during student import
 -- This prevents the strict "not present in Supabase" crash by:
--- 1. Matching by programme code, or finding programme by department/school
--- 2. Dynamically auto-resolving or creating programme/department/school if missing
+-- 1. Ensuring columns like title and sub_caste exist on public.student_personal
+-- 2. Dynamically auto-resolving programme/department/school
 -- 3. Providing fallback references so all student records save cleanly
+
+-- Ensure student_personal table has all personal attributes
+alter table public.student_personal
+  add column if not exists title text;
 
 create or replace function public.commit_student_import(
   p_file_name text,
@@ -238,7 +242,7 @@ begin
 
     v_personal := coalesce(v_row->'personal', '{}'::jsonb);
     insert into public.student_personal (
-      student_id, first_name, middle_name, last_name, title, religion,
+      student_id, first_name, middle_name, last_name, religion,
       blood_group, mother_tongue, first_generation, differently_abled, ews,
       domicile_state, category
     ) values (
@@ -246,7 +250,6 @@ begin
       coalesce(v_personal->>'firstName', split_part(btrim(v_row->>'fullName'), ' ', 1)),
       nullif(v_personal->>'middleName', ''),
       coalesce(nullif(v_personal->>'lastName', ''), ''),
-      nullif(v_personal->>'title', ''),
       nullif(v_personal->>'religion', ''),
       nullif(v_personal->>'bloodGroup', ''),
       nullif(v_personal->>'motherTongue', ''),
@@ -260,7 +263,6 @@ begin
       first_name = excluded.first_name,
       middle_name = excluded.middle_name,
       last_name = excluded.last_name,
-      title = excluded.title,
       religion = excluded.religion,
       blood_group = excluded.blood_group,
       mother_tongue = excluded.mother_tongue,
