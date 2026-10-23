@@ -1,10 +1,5 @@
 -- Migration 0012: Robust auto-resolution of programme, department, and school during student import
--- This prevents the strict "not present in Supabase" crash by:
--- 1. Ensuring columns like title and sub_caste exist on public.student_personal
--- 2. Dynamically auto-resolving programme/department/school
--- 3. Providing fallback references so all student records save cleanly
-
--- Ensure student_personal table has all personal attributes
+-- 1. Ensure student_personal table has all personal attributes
 alter table public.student_personal
   add column if not exists title text;
 
@@ -128,7 +123,7 @@ begin
       limit 1;
     end if;
 
-    -- 5. Safe Fallbacks so import never crashes on missing lookup row
+    -- 5. Safe Fallbacks
     if v_school_id is null then
       select id into v_school_id from public.schools order by id limit 1;
     end if;
@@ -155,7 +150,6 @@ begin
     order by b.year
     limit 1;
 
-    -- If no batch exists for this programme/year, create one on the fly
     if v_batch_id is null then
       v_batch_id := gen_random_uuid();
       select ay.id into v_academic_year_id from public.academic_years ay order by ay.start_date desc limit 1;
@@ -349,12 +343,17 @@ begin
       data = excluded.data,
       updated_at = now();
 
+    -- Audit log insert without strict actor_role column dependency
     insert into public.audit_logs (
-      actor_name, actor_role, action, entity, entity_id, new_value, ip_address
+      actor_id, actor_name, action, entity, entity_id, new_value, ip_address
     ) values (
-      'Portal Importer', v_role,
+      auth.uid(),
+      'Portal Importer',
       case when v_existing then 'Updated imported student' else 'Imported new student' end,
-      'Student', v_registration_id, btrim(v_row->>'fullName'), '127.0.0.1'
+      'Student',
+      v_registration_id,
+      jsonb_build_object('fullName', btrim(v_row->>'fullName')),
+      '127.0.0.1'
     );
   end loop;
 
