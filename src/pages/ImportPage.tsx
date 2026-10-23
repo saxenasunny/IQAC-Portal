@@ -402,23 +402,39 @@ export function ImportPage() {
       const programme = findProgrammeMatch(programmeName)
       if (programmeName && !programme) issues.push({ row: idx + 2, severity: 'error', field: 'programme', message: `Unknown programme: ${programmeName}` })
       const departmentName = get('department')
+      const normalizedDept = normalizeImportValue(departmentName)
       const department = departmentName
-        ? catalog.departments.find((item) => normalizeImportValue(item.name) === normalizeImportValue(departmentName) || normalizeImportValue(item.code) === normalizeImportValue(departmentName))
+        ? catalog.departments.find((item) => {
+            const itemNorm = normalizeImportValue(item.name)
+            const codeNorm = normalizeImportValue(item.code)
+            return (
+              itemNorm === normalizedDept ||
+              codeNorm === normalizedDept ||
+              (itemNorm && normalizedDept && (itemNorm.includes(normalizedDept) || normalizedDept.includes(itemNorm)))
+            )
+          })
         : catalog.departments.find((item) => item.id === existingStudent?.departmentId)
-      if (departmentName && !department) issues.push({ row: idx + 2, severity: 'error', field: 'department', message: `Unknown department: ${departmentName}` })
-      if (programme && department && programme.departmentId !== department.id) {
-        issues.push({ row: idx + 2, severity: 'error', field: 'department', message: 'Department does not match the selected programme' })
+
+      // Gracefully handle department resolution without blocking valid row import
+      if (departmentName && !department) {
+        issues.push({ row: idx + 2, severity: 'warning', field: 'department', message: `Unrecognized department: "${departmentName}"; mapping will assign parent institutional department.` })
       }
       const schoolName = get('school')
+      const normalizedSch = normalizeImportValue(schoolName)
       const school = schoolName
-        ? catalog.schools.find((item) => normalizeImportValue(item.name) === normalizeImportValue(schoolName) || normalizeImportValue(item.code) === normalizeImportValue(schoolName))
+        ? catalog.schools.find((item) => {
+            const itemNorm = normalizeImportValue(item.name)
+            const codeNorm = normalizeImportValue(item.code)
+            return (
+              itemNorm === normalizedSch ||
+              codeNorm === normalizedSch ||
+              (itemNorm && normalizedSch && (itemNorm.includes(normalizedSch) || normalizedSch.includes(itemNorm)))
+            )
+          })
         : catalog.schools.find((item) => item.id === existingStudent?.schoolId)
-      if (schoolName && !school) issues.push({ row: idx + 2, severity: 'error', field: 'school', message: `Unknown school: ${schoolName}` })
-      if (school && department && department.schoolId !== school.id) {
-        issues.push({ row: idx + 2, severity: 'error', field: 'school', message: 'School does not match the selected department' })
-      }
-      if (school && programme && catalog.departments.find((item) => item.id === programme.departmentId)?.schoolId !== school.id) {
-        issues.push({ row: idx + 2, severity: 'error', field: 'school', message: 'School does not match the selected programme' })
+
+      if (schoolName && !school) {
+        issues.push({ row: idx + 2, severity: 'warning', field: 'school', message: `Unrecognized school: "${schoolName}"; mapping will assign department parent school.` })
       }
       const genderValue = normalizeImportValue(get('gender'))
       const gender = genderValue === 'm' || genderValue === 'male' ? 'male'
@@ -478,7 +494,9 @@ export function ImportPage() {
         ?? catalog.programmes.find((item) => item.departmentId === department?.id)
         ?? catalog.programmes.find((item) => catalog.departments.find((deptItem) => deptItem.id === item.departmentId)?.schoolId === school?.id)
         ?? catalog.programmes[0]
-      const dept = catalog.departments.find((item) => item.id === prog.departmentId)!
+      const dept = department
+        ?? catalog.departments.find((item) => item.id === prog.departmentId)
+        ?? catalog.departments[0]
       const batchYearValue = get('batchYear')
       const batchYear = Number(batchYearValue.match(/\b(19|20)\d{2}\b/)?.[0])
       const batch = catalog.batches.find((item) => item.programmeId === prog.id && (!batchYear || item.year === batchYear))
