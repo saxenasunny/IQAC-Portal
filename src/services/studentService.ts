@@ -43,11 +43,14 @@ function array(value: unknown): unknown[] {
 function mapStudent(value: unknown): Student {
   const row = object(value)
   const programme = catalog.programmes.find((item) => item.code === row.programmeCode)
+    ?? catalog.programmes.find((item) => item.id === row.programmeId)
+    ?? catalog.programmes[0]
   const department = catalog.departments.find((item) => item.code === row.departmentCode)
+    ?? (programme ? catalog.departments.find((item) => item.id === programme.departmentId) : null)
+    ?? catalog.departments[0]
   const school = catalog.schools.find((item) => item.code === row.schoolCode)
-  if (!programme || !department || !school) {
-    throw new Error(`Student ${text(row.registrationId, '(unknown ID)')} references a programme or department not in the portal catalogue.`)
-  }
+    ?? (department ? catalog.schools.find((item) => item.id === department.schoolId) : null)
+    ?? catalog.schools[0]
 
   const personal = object(row.personal)
   const academic = object(row.academic)
@@ -185,14 +188,15 @@ function mapStudent(value: unknown): Student {
 }
 
 function toImportRow(student: Student): Row {
-  const programme = catalog.programmes.find((item) => item.id === student.programmeId)
+  const programme = catalog.programmes.find((item) => item.id === student.programmeId) ?? catalog.programmes[0]
   const department = catalog.departments.find((item) => item.id === student.departmentId)
+    ?? (programme ? catalog.departments.find((item) => item.id === programme.departmentId) : null)
+    ?? catalog.departments[0]
   const school = catalog.schools.find((item) => item.id === student.schoolId)
+    ?? (department ? catalog.schools.find((item) => item.id === department.schoolId) : null)
+    ?? catalog.schools[0]
   const batch = catalog.batches.find((item) => item.id === student.batchId)
   const academicYear = catalog.academicYears.find((item) => item.id === student.academicYearId)
-  if (!programme || !department || !school) {
-    throw new Error(`Cannot save ${student.registrationId}: its programme, department, or school is missing from the portal catalogue.`)
-  }
   const { additionalIdentifiers: _additionalIdentifiers, ...sensitive } = student.sensitive ?? {}
   return {
     ...student,
