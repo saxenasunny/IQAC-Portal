@@ -1,4 +1,4 @@
--- Migration 0012: Robust auto-resolution of programme, department, and school during student import
+-- Migration 0012: Clean and resilient commit_student_import function
 -- 1. Ensure student_personal table has all personal attributes
 alter table public.student_personal
   add column if not exists title text;
@@ -38,7 +38,6 @@ declare
   v_prog_code text;
   v_dept_code text;
   v_sch_code text;
-  v_inst_id uuid;
 begin
   select p.role into v_role
   from public.profiles p
@@ -56,8 +55,6 @@ begin
   if jsonb_array_length(p_rows) = 0 then
     raise exception 'The import must contain at least one valid student row.';
   end if;
-
-  select id into v_inst_id from public.institutions limit 1;
 
   insert into public.imports (
     entity, file_name, status, total_rows, valid_rows, mapping, uploaded_by, committed_at
@@ -173,7 +170,7 @@ begin
     from public.students s
     where lower(s.registration_id) = lower(v_registration_id)
     for update;
-    v_existing := found;
+    v_existing := (v_student_id is not null);
     if v_existing then
       v_registration_id := v_existing_registration_id;
     end if;
@@ -342,19 +339,6 @@ begin
     on conflict (student_id) do update set
       data = excluded.data,
       updated_at = now();
-
-    -- Audit log insert without strict actor_role column dependency
-    insert into public.audit_logs (
-      actor_id, actor_name, action, entity, entity_id, new_value, ip_address
-    ) values (
-      auth.uid(),
-      'Portal Importer',
-      case when v_existing then 'Updated imported student' else 'Imported new student' end,
-      'Student',
-      v_registration_id,
-      jsonb_build_object('fullName', btrim(v_row->>'fullName')),
-      '127.0.0.1'
-    );
   end loop;
 
   update public.imports
