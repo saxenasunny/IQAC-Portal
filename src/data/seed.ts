@@ -1,3 +1,4 @@
+import { userProgrammes } from '@/data/programmesSeed'
 import type {
   AcademicYear,
   AuditLog,
@@ -44,13 +45,6 @@ export const schools: School[] = [
   { id: 'sch_sci', code: 'SOS', name: 'School of Sciences', deanName: '', campusId: 'camp_main' },
   { id: 'sch_law', code: 'SOL', name: 'School of Law', deanName: '', campusId: 'camp_noida' },
   { id: 'sch_hum', code: 'SOH', name: 'School of Humanities', deanName: '', campusId: 'camp_main' },
-  { id: 'sch_health', code: 'SHAS', name: 'School of Healthcare and Allied Sciences', deanName: '', campusId: 'camp_main' },
-  { id: 'sch_agri', code: 'SOAS', name: 'School of Agricultural Sciences', deanName: '', campusId: 'camp_main' },
-  { id: 'sch_hosp', code: 'SOHT', name: 'School of Hospitality & Tourism', deanName: '', campusId: 'camp_main' },
-  { id: 'sch_uid', code: 'UID', name: 'United World Institute of Design (UID)', deanName: '', campusId: 'camp_main' },
-  { id: 'sch_lib', code: 'SOLA', name: 'School of Liberal Arts', deanName: '', campusId: 'camp_main' },
-  { id: 'sch_media', code: 'SME', name: 'School of Media and Entertainment', deanName: '', campusId: 'camp_main' },
-  { id: 'sch_coe', code: 'COE', name: 'Centres of Excellence & Innovation', deanName: '', campusId: 'camp_main' },
 ]
 
 export const departments: Department[] = [
@@ -65,19 +59,6 @@ export const departments: Department[] = [
   { id: 'dep_eng', schoolId: 'sch_hum', code: 'ENG', name: 'English', hodName: '' },
   { id: 'dep_psy', schoolId: 'sch_hum', code: 'PSY', name: 'Psychology', hodName: '' },
   { id: 'dep_ses', schoolId: 'sch_eng', code: 'SES', name: 'School of Engineering & Sciences', hodName: '' },
-
-  // Institutional departments matching exact Excel Department column values
-  { id: 'dep_sol_full', schoolId: 'sch_law', code: 'SOLAW', name: 'School of Law', hodName: '' },
-  { id: 'dep_shas', schoolId: 'sch_health', code: 'SHAS', name: 'School of Healthcare and Allied Sciences', hodName: '' },
-  { id: 'dep_soas', schoolId: 'sch_agri', code: 'SOAS', name: 'School of Agricultural Sciences', hodName: '' },
-  { id: 'dep_coe_env', schoolId: 'sch_coe', code: 'COE-ENV', name: 'Centre Of Excellence: Occupational Health, Safety, Fire & Environment', hodName: '' },
-  { id: 'dep_soht', schoolId: 'sch_hosp', code: 'SOHT', name: 'School of Hospitality & Tourism', hodName: '' },
-  { id: 'dep_uid', schoolId: 'sch_uid', code: 'UID', name: 'United World Institute of Design (UID)', hodName: '' },
-  { id: 'dep_som_full', schoolId: 'sch_mgmt', code: 'SOM', name: 'School of Management', hodName: '' },
-  { id: 'dep_sola_full', schoolId: 'sch_lib', code: 'SOLA', name: 'School of Liberal Arts', hodName: '' },
-  { id: 'dep_caes', schoolId: 'sch_coe', code: 'CAES', name: 'Centre of Aerospace and Energy Studies', hodName: '' },
-  { id: 'dep_cie', schoolId: 'sch_coe', code: 'CIE', name: 'Centre for Innovation and Entrepreneurship', hodName: '' },
-  { id: 'dep_sme', schoolId: 'sch_media', code: 'SME', name: 'School of Media and Entertainment', hodName: '' },
 ]
 
 export const academicYears: AcademicYear[] = [
@@ -86,7 +67,7 @@ export const academicYears: AcademicYear[] = [
   { id: 'ay_2526', label: '2025-26', startDate: '2025-07-01', endDate: '2026-06-30', isCurrent: true },
 ]
 
-export const programmes: Programme[] = [
+const BASE_PROGRAMMES: Programme[] = [
   { id: 'prg_btech_cse', departmentId: 'dep_cse', code: 'BTECH-CSE', name: 'B.Tech Computer Science', level: 'UG', isActive: true },
   { id: 'prg_btech_ai', departmentId: 'dep_cse', code: 'BTECH-AI', name: 'B.Tech Artificial Intelligence', level: 'UG', isActive: true },
   { id: 'prg_mtech_cse', departmentId: 'dep_cse', code: 'MTECH-CSE', name: 'M.Tech Computer Science', level: 'PG', isActive: true },
@@ -140,6 +121,8 @@ export const programmes: Programme[] = [
   { id: 'prg_ses_mca_genai_nvidia', departmentId: 'dep_ses', code: 'SES-MCA-GENAI-NVIDIA', name: 'MCA (Master of Computer Applications) Generative AI - NVIDIA', level: 'PG', isActive: true },
   { id: 'prg_ses_btech_ece_quantum', departmentId: 'dep_ses', code: 'SES-BTECH-ECE-QUANTUM', name: 'B.Tech. in Electronics and Communication Engineering with Specialization in Quantum Technology', level: 'UG', isActive: true },
 ]
+
+export const programmes: Programme[] = [...BASE_PROGRAMMES, ...userProgrammes]
 
 export const batches: Batch[] = programmes.flatMap((p, i) => [
   { id: `bat_${p.id}_24`, programmeId: p.id, academicYearId: 'ay_2425', year: 2024, label: `${p.code} 2024` },

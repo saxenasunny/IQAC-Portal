@@ -265,22 +265,30 @@ function findProgrammeMatch(value: string) {
   const normalized = normalizeImportValue(value)
   if (!normalized) return null
 
+  // 1. Exact name or code match
   const exactMatch = catalog.programmes.find((programme) =>
     normalizeImportValue(programme.name) === normalized || normalizeImportValue(programme.code) === normalized,
   )
   if (exactMatch) return exactMatch
 
+  // 2. Normalized abbreviations match
   const target = normalizeProgrammeName(value)
-  return catalog.programmes.find((programme) => {
+  const aliasMatch = catalog.programmes.find((programme) => {
     const aliases = [
       programme.name,
       programme.name.replace(/\./g, ' '),
       programme.code,
       programme.code.replace(/[-_]/g, ' '),
     ]
-
     return aliases.some((alias) => normalizeProgrammeName(alias) === target)
   })
+  if (aliasMatch) return aliasMatch
+
+  // 3. Substring / fuzzy match
+  return catalog.programmes.find((programme) => {
+    const pNorm = normalizeImportValue(programme.name)
+    return pNorm && (pNorm.includes(normalized) || normalized.includes(pNorm))
+  }) ?? null
 }
 
 export function ImportPage() {
