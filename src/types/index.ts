@@ -22,7 +22,16 @@ export type WorkflowStatus =
   | 'revised'
   | 're_verified'
 
-export type StudentStatus = 'active' | 'inactive' | 'graduated' | 'alumni' | 'withdrawn' | 'suspended'
+export type StudentStatus =
+  | 'active'
+  | 'inactive'
+  | 'graduated'
+  | 'alumni'
+  | 'ng_alumni'
+  | 'nep_exit'
+  | 'repeat'
+  | 'withdrawn'
+  | 'suspended'
 export type AcademicStatus = 'regular' | 'lateral' | 're_admitted' | 'detained'
 export type Gender = 'male' | 'female' | 'other' | 'prefer_not_to_say'
 export type EmploymentType = 'permanent' | 'contract' | 'visiting' | 'adjunct'

@@ -6,7 +6,17 @@ type Row = Record<string, unknown>
 
 const STUDENT_IMPORT_BATCH_SIZE = 10
 
-const STUDENT_STATUSES: Student['studentStatus'][] = ['active', 'inactive', 'graduated', 'alumni', 'withdrawn', 'suspended']
+const STUDENT_STATUSES: Student['studentStatus'][] = [
+  'active',
+  'inactive',
+  'graduated',
+  'alumni',
+  'ng_alumni',
+  'nep_exit',
+  'repeat',
+  'withdrawn',
+  'suspended',
+]
 const ACADEMIC_STATUSES: Student['academicStatus'][] = ['regular', 'lateral', 're_admitted', 'detained']
 const GENDERS: Gender[] = ['male', 'female', 'other', 'prefer_not_to_say']
 const WORKFLOWS: Student['workflow'][] = [

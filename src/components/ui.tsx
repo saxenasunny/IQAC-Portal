@@ -177,10 +177,11 @@ export function MetricHint({
 }
 
 export const statusTone = (status: string) => {
-  const s = status.toLowerCase()
+  const s = status.toLowerCase().replace(/[\.\s\-]/g, '_')
   if (['active', 'approved', 'verified', 'done', 'committed'].includes(s)) return 'green' as const
+  if (['alumni', 'ng_alumni', 'graduated'].includes(s)) return 'blue' as const
   if (['submitted', 'under_review', 'data_collection', 'in_progress', 'open'].includes(s)) return 'blue' as const
-  if (['needs_revision', 'change_requested', 'draft', 'not_started', 'expired'].includes(s)) return 'amber' as const
-  if (['rejected', 'failed', 'inactive', 'suspended'].includes(s)) return 'red' as const
+  if (['nep_exit', 'repeat', 'needs_revision', 'change_requested', 'draft', 'not_started', 'expired'].includes(s)) return 'amber' as const
+  if (['withdrawn', 'rejected', 'failed', 'inactive', 'suspended'].includes(s)) return 'red' as const
   return 'neutral' as const
 }

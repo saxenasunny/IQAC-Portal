@@ -426,10 +426,38 @@ export function ImportPage() {
           : genderValue === 'other' ? 'other'
             : genderValue ? 'prefer_not_to_say' : existingStudent?.gender ?? 'prefer_not_to_say'
       if (genderValue && gender === 'prefer_not_to_say') issues.push({ row: idx + 2, severity: 'warning', field: 'gender', message: 'Unrecognized gender; using unspecified' })
-      const statusValue = normalizeImportValue(get('studentStatus')).replace(/ /g, '_')
-      const studentStatuses: Student['studentStatus'][] = ['active', 'inactive', 'graduated', 'alumni', 'withdrawn', 'suspended']
-      const studentStatus = studentStatuses.find((status) => status === statusValue)
-      if (statusValue && !studentStatus) issues.push({ row: idx + 2, severity: 'warning', field: 'studentStatus', message: `Unrecognized student status "${get('studentStatus')}"; keeping the existing status or using active` })
+      const rawStatus = String(get('studentStatus') ?? '').trim().toLowerCase()
+      const normalizedStatus = rawStatus.replace(/[\.\s\-]/g, '_')
+      let studentStatus: Student['studentStatus'] | undefined = undefined
+
+      if (['active'].includes(rawStatus) || normalizedStatus === 'active') {
+        studentStatus = 'active'
+      } else if (['n_g_alumni', 'ng_alumni', 'ngalumni'].includes(normalizedStatus) || rawStatus.includes('n.g.alumni') || rawStatus.includes('ng alumni')) {
+        studentStatus = 'ng_alumni'
+      } else if (['nep_exit', 'nepexit'].includes(normalizedStatus) || rawStatus.includes('nep exit')) {
+        studentStatus = 'nep_exit'
+      } else if (['alumni'].includes(normalizedStatus)) {
+        studentStatus = 'alumni'
+      } else if (['repeat', 'repeater'].includes(normalizedStatus)) {
+        studentStatus = 'repeat'
+      } else if (['withdrawn', 'withdraw'].includes(normalizedStatus)) {
+        studentStatus = 'withdrawn'
+      } else if (['graduated', 'graduate'].includes(normalizedStatus)) {
+        studentStatus = 'graduated'
+      } else if (['inactive'].includes(normalizedStatus)) {
+        studentStatus = 'inactive'
+      } else if (['suspended'].includes(normalizedStatus)) {
+        studentStatus = 'suspended'
+      }
+
+      if (rawStatus && !studentStatus) {
+        issues.push({
+          row: idx + 2,
+          severity: 'warning',
+          field: 'studentStatus',
+          message: `Unrecognized student status "${get('studentStatus')}"; keeping the existing status or using active`,
+        })
+      }
       const academicStatusValue = normalizeImportValue(get('academicStatus')).replace(/ /g, '_')
       const academicStatuses: Student['academicStatus'][] = ['regular', 'lateral', 're_admitted', 'detained']
       const academicStatus = academicStatuses.find((status) => status === academicStatusValue)
