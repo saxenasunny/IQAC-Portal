@@ -96,7 +96,6 @@ export function evaluateRequirementFormula(formula: string | undefined, students
     case 'COUNT(gender = Male)':
       return String(active.filter((s) => s.gender === 'male').length)
     case 'COUNT(nationality != India)':
-    case "COUNT(nationality != India)":
       return String(active.filter((s) => s.nationality !== 'India').length)
     case 'Total Students / Total Faculty':
       return activeFaculty.length ? (active.length / activeFaculty.length).toFixed(2) : '0'
