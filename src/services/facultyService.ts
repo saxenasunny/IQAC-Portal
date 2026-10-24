@@ -103,9 +103,9 @@ export const facultyService = {
       supabase.from('departments').select('id, code, school_id'),
       supabase.from('schools').select('id, code'),
     ])
-    if (facultyResult.error) throw facultyResult.error
-    if (departmentResult.error) throw departmentResult.error
-    if (schoolResult.error) throw schoolResult.error
+    if (facultyResult.error) throw new Error(`Faculty: ${facultyResult.error.message}`)
+    if (departmentResult.error) throw new Error(`Departments: ${departmentResult.error.message}`)
+    if (schoolResult.error) throw new Error(`Schools: ${schoolResult.error.message}`)
 
     const departmentIds = new Map((departmentResult.data ?? []).map((row) => [row.id, row.code]))
     const schoolIds = new Map((schoolResult.data ?? []).map((row) => [row.id, row.code]))

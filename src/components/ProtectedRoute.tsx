@@ -8,6 +8,19 @@ import { studentService } from '@/services/studentService'
 import { facultyService } from '@/services/facultyService'
 import { usePortalStore } from '@/store/portalStore'
 
+function extractErrorMessage(err: unknown): string {
+  if (!err) return 'Failed to sync latest portal data.'
+  if (err instanceof Error) return err.message
+  if (typeof err === 'object') {
+    const obj = err as Record<string, unknown>
+    if (typeof obj.message === 'string' && obj.message) return obj.message
+    if (typeof obj.error_description === 'string' && obj.error_description) return obj.error_description
+    if (typeof obj.details === 'string' && obj.details) return obj.details
+    if (typeof obj.hint === 'string' && obj.hint) return obj.hint
+  }
+  return typeof err === 'string' ? err : 'Failed to sync latest portal data.'
+}
+
 export function ProtectedRoute() {
   const user = usePortalStore((s) => s.currentUser)
   const setAuthenticatedUser = usePortalStore((s) => s.setAuthenticatedUser)
@@ -51,7 +64,7 @@ export function ProtectedRoute() {
       } catch (err) {
         if (!cancelled) {
           if (!user) {
-            setAuthError(err instanceof Error ? err.message : 'Unable to verify your session.')
+            setAuthError(extractErrorMessage(err))
           }
           setReady(true)
         }
@@ -73,18 +86,40 @@ export function ProtectedRoute() {
       setIsLoadingData(true)
       setDataSyncError(null)
       try {
-        const [studentList, facultyList] = await Promise.all([
+        const [studentResult, facultyResult] = await Promise.allSettled([
           studentService.listPortal(),
           facultyService.list(),
         ])
+
+        const errors: string[] = []
+
+        if (studentResult.status === 'fulfilled') {
+          setStudents(studentResult.value)
+        } else {
+          const msg = extractErrorMessage(studentResult.reason)
+          errors.push(msg)
+          console.error('Failed to sync students:', studentResult.reason)
+        }
+
+        if (facultyResult.status === 'fulfilled') {
+          setFaculty(facultyResult.value)
+        } else {
+          console.warn('Faculty sync issue:', facultyResult.reason)
+        }
+
         if (!cancelled) {
-          setStudents(studentList)
-          setFaculty(facultyList)
+          if (errors.length > 0) {
+            const finalMessage = errors.join('; ')
+            setDataSyncError(finalMessage)
+            toast.error(finalMessage)
+          } else {
+            setDataSyncError(null)
+          }
           setIsLoadingData(false)
         }
       } catch (err) {
         if (!cancelled) {
-          const message = err instanceof Error ? err.message : 'Failed to sync latest portal data.'
+          const message = extractErrorMessage(err)
           setDataSyncError(message)
           setIsLoadingData(false)
           toast.error(message)
@@ -106,7 +141,7 @@ export function ProtectedRoute() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-navy-700 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-3 border-navy-700 border-t-transparent" />
           <p className="text-sm font-medium text-navy-800">Connecting to Portal…</p>
         </div>
       </div>
@@ -130,8 +165,7 @@ export function ProtectedRoute() {
                   setAuthenticatedUser(null)
                   setAuthError('')
                 }).catch((error: unknown) => {
-                  const message = error instanceof Error ? error.message : 'Unable to sign out.'
-                  toast.error(message)
+                  toast.error(extractErrorMessage(error))
                 })
               }}
             >

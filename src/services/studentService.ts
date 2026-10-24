@@ -238,7 +238,9 @@ export const studentService = {
         .rpc('list_portal_students')
         .range(from, from + PAGE_SIZE - 1)
 
-      if (error) throw error
+      if (error) {
+        throw new Error(error.message || `Database error (${error.code || 'unknown'}) loading students`)
+      }
       if (!Array.isArray(data) || data.length === 0) break
       allStudents.push(...data.map(mapStudent))
       if (data.length < PAGE_SIZE) break
