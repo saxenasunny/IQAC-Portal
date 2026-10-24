@@ -85,6 +85,10 @@ begin
     email,
     encrypted_password,
     email_confirmed_at,
+    confirmation_token,
+    recovery_token,
+    email_change_token_new,
+    email_change,
     raw_app_meta_data,
     raw_user_meta_data,
     aud,
@@ -97,6 +101,10 @@ begin
     lower(btrim(p_email)),
     v_encrypted_pw,
     now(),
+    '',
+    '',
+    '',
+    '',
     jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
     jsonb_build_object('full_name', btrim(p_full_name)),
     'authenticated',
@@ -105,7 +113,33 @@ begin
     now()
   );
 
-  -- 5b. Create entry in auth.identities if table exists
+  -- 5a. Ensure optional GoTrue token columns are empty strings if present
+  begin
+    update auth.users
+    set
+      confirmation_token = coalesce(confirmation_token, ''),
+      recovery_token = coalesce(recovery_token, ''),
+      email_change = coalesce(email_change, ''),
+      email_change_token_new = coalesce(email_change_token_new, ''),
+      email_change_token_current = coalesce(email_change_token_current, ''),
+      phone_change = coalesce(phone_change, ''),
+      phone_change_token = coalesce(phone_change_token, ''),
+      reauthentication_token = coalesce(reauthentication_token, '')
+    where id = v_user_id;
+  exception when others then
+    null;
+  end;
+
+  -- 5b. Set confirmed_at if column exists
+  begin
+    update auth.users
+    set confirmed_at = now()
+    where id = v_user_id and confirmed_at is null;
+  exception when others then
+    null;
+  end;
+
+  -- 5c. Create entry in auth.identities
   begin
     insert into auth.identities (
       id,
@@ -117,10 +151,10 @@ begin
       created_at,
       updated_at
     ) values (
-      v_user_id::text,
+      gen_random_uuid(),
       v_user_id::text,
       v_user_id,
-      jsonb_build_object('sub', v_user_id::text, 'email', lower(btrim(p_email))),
+      jsonb_build_object('sub', v_user_id::text, 'email', lower(btrim(p_email)), 'email_verified', true),
       'email',
       now(),
       now(),
@@ -140,7 +174,7 @@ begin
       ) values (
         v_user_id::text,
         v_user_id,
-        jsonb_build_object('sub', v_user_id::text, 'email', lower(btrim(p_email))),
+        jsonb_build_object('sub', v_user_id::text, 'email', lower(btrim(p_email)), 'email_verified', true),
         'email',
         now(),
         now(),
