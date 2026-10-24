@@ -285,10 +285,40 @@ export const studentService = {
   async listPortal(): Promise<Student[]> {
     if (!supabase) throw new Error('Supabase is not configured.')
 
-    // Direct, ultra-fast table query on public.students
-    // Avoids massive multi-table JSON joins that cause database statement_timeout
+    // Uses SECURITY DEFINER RPC that checks the caller's role ONCE (not per row),
+    // bypassing per-row RLS evaluation that causes statement_timeout for non-admin users.
+    // PAGE_SIZE must be <= 1000 (Supabase PostgREST default max_rows).
     const allStudents: Student[] = []
-    const PAGE_SIZE = 2500
+    const PAGE_SIZE = 1000
+    let from = 0
+
+    while (true) {
+      const { data, error } = await supabase
+        .rpc('list_students_fast')
+        .order('registration_id', { ascending: true })
+        .range(from, from + PAGE_SIZE - 1)
+
+      if (error) {
+        // Fallback: if the RPC doesn't exist yet (migration not run), try direct table query
+        if (error.code === 'PGRST202') {
+          console.warn('list_students_fast RPC not found. Falling back to direct table query. Run migration 0018 for best performance.')
+          return this._listPortalFallback()
+        }
+        throw new Error(error.message || `Database error (${error.code || 'unknown'}) loading students`)
+      }
+      if (!Array.isArray(data) || data.length === 0) break
+      allStudents.push(...data.map(toStudentFromDbRow))
+      if (data.length < PAGE_SIZE) break
+      from += PAGE_SIZE
+    }
+    return allStudents
+  },
+
+  /** Fallback direct table query (works for super_admin; may timeout for other roles due to RLS) */
+  async _listPortalFallback(): Promise<Student[]> {
+    if (!supabase) throw new Error('Supabase is not configured.')
+    const allStudents: Student[] = []
+    const PAGE_SIZE = 1000
     let from = 0
 
     while (true) {
