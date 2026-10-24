@@ -62,15 +62,47 @@ export const userService = {
 
   async create(user: CreatePortalUser): Promise<void> {
     const client = requireSupabase()
-    const { data, error } = await client.functions.invoke('create-portal-user', { body: user })
-    if (error) {
-      const response = error.context
-      if (response instanceof Response) {
-        const body = await response.json().catch(() => null) as { error?: string } | null
-        throw new Error(body?.error ?? error.message)
-      }
-      throw error
+
+    // 1. Try PostgreSQL stored procedure first (direct, zero edge function deployment needed)
+    const { data: rpcData, error: rpcError } = await client.rpc('admin_create_portal_user', {
+      p_email: user.email,
+      p_full_name: user.fullName,
+      p_password: user.password,
+      p_role: user.role,
+      p_school_code: user.schoolCode ?? null,
+      p_department_code: user.departmentCode ?? null,
+    })
+
+    if (!rpcError && (rpcData as { success?: boolean })?.success) {
+      return
     }
-    if (!data || data.success !== true) throw new Error('The server did not confirm user creation.')
+
+    // 2. If RPC not found (PGRST202), fallback to edge function if deployed
+    if (rpcError && rpcError.code === 'PGRST202') {
+      const { data, error } = await client.functions.invoke('create-portal-user', { body: user })
+      if (error) {
+        const response = error.context
+        if (response instanceof Response) {
+          const body = await response.json().catch(() => null) as { error?: string } | null
+          throw new Error(body?.error ?? error.message)
+        }
+        throw error
+      }
+      if (!data || data.success !== true) throw new Error('The server did not confirm user creation.')
+      return
+    }
+
+    if (rpcError) {
+      throw new Error(rpcError.message)
+    }
+  },
+
+  async updateStatus(userId: string, isActive: boolean): Promise<void> {
+    const client = requireSupabase()
+    const { error } = await client
+      .from('profiles')
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+    if (error) throw error
   },
 }

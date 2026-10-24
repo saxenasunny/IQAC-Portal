@@ -80,6 +80,22 @@ export function AppLayout() {
     }
   }
 
+  const navigation = useMemo(() => {
+    const list = [...NAV]
+    if (user?.role === 'super_admin' || user?.role === 'iqac_admin') {
+      list.push({
+        label: 'Administration',
+        icon: ShieldCheck,
+        items: [
+          { to: '/admin/users', label: 'User Management' },
+          { to: '/admin/roles', label: 'Roles & Access' },
+          { to: '/admin/audit', label: 'Audit Logs' },
+        ],
+      })
+    }
+    return list
+  }, [user?.role])
+
   const crumbs = useMemo(() => {
     const parts = location.pathname.split('/').filter(Boolean)
     if (!parts.length) return ['Student Overview']
@@ -124,7 +140,7 @@ export function AppLayout() {
         </div>
 
         <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-4">
-          {NAV.map((group) => (
+          {navigation.map((group) => (
             <div key={group.label}>
               <div className="mb-2 flex items-center gap-2 px-2 text-xs font-semibold uppercase tracking-wider text-navy-300">
                 <group.icon className="h-3.5 w-3.5" />

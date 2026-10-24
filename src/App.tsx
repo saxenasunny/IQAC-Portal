@@ -12,6 +12,12 @@ import {
   DataValidationPage,
 } from '@/pages/DataPages'
 import { StudentReportsPage } from '@/pages/ReportsPages'
+import {
+  UsersPage,
+  RolesPage,
+  PermissionsPage,
+  AuditLogsPage,
+} from '@/pages/AdminPages'
 
 export default function App() {
   return (
@@ -32,6 +38,12 @@ export default function App() {
 
           {/* Student Reports */}
           <Route path="/reports/students" element={<StudentReportsPage />} />
+
+          {/* Administration & User Management */}
+          <Route path="/admin/users" element={<UsersPage />} />
+          <Route path="/admin/roles" element={<RolesPage />} />
+          <Route path="/admin/permissions" element={<PermissionsPage />} />
+          <Route path="/admin/audit" element={<AuditLogsPage />} />
         </Route>
       </Route>
       {/* Catch-all redirect to student dashboard */}

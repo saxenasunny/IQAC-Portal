@@ -25,6 +25,20 @@ export function UsersPage() {
   const [departmentCode, setDepartmentCode] = useState('')
   const canManage = canManageUsers(currentUser.role)
 
+  async function toggleStatus(targetUser: PortalUser) {
+    if (targetUser.id === currentUser.id) {
+      toast.error('You cannot change your own active status.')
+      return
+    }
+    try {
+      await userService.updateStatus(targetUser.id, !targetUser.isActive)
+      toast.success(`${targetUser.fullName} is now ${!targetUser.isActive ? 'Active' : 'Inactive'}.`)
+      await loadUsers()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to update user status.')
+    }
+  }
+
   async function loadUsers() {
     setLoading(true)
     setError('')
@@ -103,7 +117,7 @@ export function UsersPage() {
         <Card className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-navy-950 text-left text-white">
-              <tr>{['Name', 'Email', 'Role', 'Scope', 'Status'].map((heading) => <th key={heading} className="px-4 py-3">{heading}</th>)}</tr>
+              <tr>{['Name', 'Email', 'Role', 'Scope', 'Status', 'Action'].map((heading) => <th key={heading} className="px-4 py-3">{heading}</th>)}</tr>
             </thead>
             <tbody>
               {users.map((user) => (
@@ -113,6 +127,19 @@ export function UsersPage() {
                   <td className="px-4 py-2">{ROLE_LABELS[user.role]}</td>
                   <td className="px-4 py-2">{catalog.departments.find((department) => department.id === user.departmentId)?.name ?? catalog.schools.find((school) => school.id === user.schoolId)?.name ?? 'Institution-wide'}</td>
                   <td className="px-4 py-2"><Badge tone={user.isActive ? 'green' : 'red'}>{user.isActive ? 'Active' : 'Inactive'}</Badge></td>
+                  <td className="px-4 py-2">
+                    {user.id !== currentUser.id ? (
+                      <button
+                        type="button"
+                        onClick={() => void toggleStatus(user)}
+                        className="text-xs text-navy-600 hover:text-navy-900 underline font-medium cursor-pointer"
+                      >
+                        {user.isActive ? 'Deactivate' : 'Activate'}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-slate-400">Current</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -146,11 +173,11 @@ export function UsersPage() {
               </Select>
             </Field>
           ) : null}
-          <Field label="Initial password" hint="Use at least 12 characters. Share it with the user through a secure channel.">
-            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required />
+          <Field label="Initial password" hint="Use at least 6 characters. Share it with the user through a secure channel.">
+            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} maxLength={128} autoComplete="new-password" required />
           </Field>
           <Field label="Confirm password">
-            <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={12} maxLength={128} autoComplete="new-password" required />
+            <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={6} maxLength={128} autoComplete="new-password" required />
           </Field>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button>
