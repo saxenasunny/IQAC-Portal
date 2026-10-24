@@ -217,6 +217,18 @@ function toImportRow(student: Student): Row {
 export const studentService = {
   async listPortal(): Promise<Student[]> {
     if (!supabase) throw new Error('Supabase is not configured.')
+
+    // 1. Try fast single-roundtrip bundle first (~1s for all records)
+    try {
+      const { data, error } = await supabase.rpc('list_portal_students_bundle')
+      if (!error && Array.isArray(data)) {
+        return data.map(mapStudent)
+      }
+    } catch {
+      // Fallback below
+    }
+
+    // 2. Fallback to paginated list_portal_students if bundle is not yet applied in DB
     const allStudents: Student[] = []
     const PAGE_SIZE = 1000
     let from = 0

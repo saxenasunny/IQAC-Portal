@@ -5,11 +5,13 @@ import { computeInstitutionMetrics } from '@/lib/formulas'
 import { visibleStudents } from '@/lib/lookups'
 import { formatNumber } from '@/lib/utils'
 import { catalog, usePortalStore } from '@/store/portalStore'
-import { ArrowRight, CheckCircle2, Database, FileSpreadsheet, ShieldCheck, Users } from 'lucide-react'
+import { ArrowRight, CheckCircle2, FileSpreadsheet, ShieldCheck, Users } from 'lucide-react'
 
 export function DashboardPage() {
   const user = usePortalStore((s) => s.currentUser)!
   const allStudents = usePortalStore((s) => s.students)
+  const isLoadingData = usePortalStore((s) => s.isLoadingData)
+  const dataSyncError = usePortalStore((s) => s.dataSyncError)
   const students = visibleStudents(allStudents, user.role, user.schoolId, user.departmentId).filter((s) => !s.isArchived)
   const metrics = computeInstitutionMetrics(students, [])
   const validationIssues = students.filter((s) => !s.email || !s.personal?.category || !s.dateOfBirth).length
@@ -24,10 +26,12 @@ export function DashboardPage() {
     .filter((x) => x.students)
     .slice(0, 8)
 
+  const isSyncingInitial = isLoadingData && allStudents.length === 0
+
   const cards = [
     {
       label: 'Active Students',
-      value: students.length,
+      value: isSyncingInitial ? 'Syncing…' : students.length,
       to: '/students',
       desc: 'Enrolled & tracked in database',
       icon: Users,
@@ -41,14 +45,14 @@ export function DashboardPage() {
     },
     {
       label: 'Validation Checks',
-      value: validationIssues === 0 ? 'All Valid' : `${validationIssues} Flagged`,
+      value: isSyncingInitial ? '…' : (validationIssues === 0 ? 'All Valid' : `${validationIssues} Flagged`),
       to: '/data/validation',
       desc: 'Rule & schema verification issues',
       icon: CheckCircle2,
     },
     {
       label: 'Quality Score',
-      value: students.length ? '92%' : 'No Data',
+      value: isSyncingInitial ? '…' : (students.length ? '92%' : 'No Data'),
       to: '/data/quality',
       desc: 'Field completeness across records',
       icon: ShieldCheck,
@@ -61,6 +65,25 @@ export function DashboardPage() {
         title="Student Database & Mapping Center"
         subtitle={`GD Goenka University · Normalized Student Data & Attribute Mapping Engine`}
       />
+
+      {isLoadingData && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/70 p-3 text-xs text-blue-900">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+          <span>Syncing latest student records from database…</span>
+        </div>
+      )}
+
+      {dataSyncError && (
+        <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+          <span>Failed to sync database: {dataSyncError}</span>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded bg-red-100 px-2 py-1 font-semibold text-red-900 hover:bg-red-200"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Main KPI Grid */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

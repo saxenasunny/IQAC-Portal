@@ -38,6 +38,10 @@ interface PortalState {
   auditLogs: AuditLog[]
   notifications: NotificationItem[]
   imports: ImportJob[]
+  isLoadingData: boolean
+  dataSyncError: string | null
+  setIsLoadingData: (loading: boolean) => void
+  setDataSyncError: (error: string | null) => void
   setAuthenticatedUser: (user: Profile | null) => void
   setStudents: (students: Student[]) => void
   setFaculty: (faculty: Faculty[]) => void
@@ -82,6 +86,10 @@ export const usePortalStore = create<PortalState>()(
       auditLogs: [],
       notifications: [],
       imports: [],
+      isLoadingData: false,
+      dataSyncError: null,
+      setIsLoadingData: (isLoadingData) => set({ isLoadingData }),
+      setDataSyncError: (dataSyncError) => set({ dataSyncError }),
       setAuthenticatedUser: (user) => set({ currentUser: user }),
       setStudents: (students) => {
         set({ students })
@@ -94,7 +102,7 @@ export const usePortalStore = create<PortalState>()(
       logout: () => {
         const user = get().currentUser
         if (user) get().addAudit({ action: 'Logged out', entity: 'Session', entityId: user.id })
-        set({ currentUser: null })
+        set({ currentUser: null, students: [], faculty: [], dataSyncError: null, isLoadingData: false })
       },
       upsertStudent: (student, reason) => {
         const existing = get().students.find((s) => s.id === student.id)
@@ -289,6 +297,8 @@ export const usePortalStore = create<PortalState>()(
       version: 2,
       partialize: (state) => ({
         ...state,
+        isLoadingData: false,
+        dataSyncError: null,
         students: isSupabaseConfigured ? [] : state.students,
       }),
       migrate: (persistedState) => {

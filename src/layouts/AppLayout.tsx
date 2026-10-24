@@ -65,6 +65,7 @@ export function AppLayout() {
   const logout = usePortalStore((s) => s.logout)
   const notifications = usePortalStore((s) => s.notifications)
   const students = usePortalStore((s) => s.students)
+  const isLoadingData = usePortalStore((s) => s.isLoadingData)
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [showSearch, setShowSearch] = useState(false)
@@ -213,6 +214,12 @@ export function AppLayout() {
           </div>
 
           <div className="flex items-center gap-3">
+            {isLoadingData && (
+              <span className="hidden items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 sm:inline-flex border border-blue-200/60">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-blue-600" />
+                Syncing…
+              </span>
+            )}
             <div className="relative">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />

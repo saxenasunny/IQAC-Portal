@@ -37,6 +37,7 @@ const DEFAULT_VISIBLE_COLUMNS = [
 export function StudentsPage() {
   const user = usePortalStore((s) => s.currentUser)!
   const allStudents = usePortalStore((s) => s.students)
+  const isLoadingData = usePortalStore((s) => s.isLoadingData)
   const students = visibleStudents(allStudents, user.role, user.schoolId, user.departmentId).filter(
     (s) => !s.isArchived,
   )
@@ -390,10 +391,20 @@ export function StudentsPage() {
               {displayedStudents.length === 0 ? (
                 <tr>
                   <td colSpan={visibleColumnIds.length + 2} className="py-12 text-center text-slate-400">
-                    <p className="text-sm font-medium text-navy-800">No matching students found</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Try relaxing your search query or column filters.
-                    </p>
+                    {isLoadingData && allStudents.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-navy-700 border-t-transparent" />
+                        <p className="text-sm font-medium text-navy-800">Loading student records from Supabase…</p>
+                        <p className="text-xs text-slate-500">Fetching normalized dataset…</p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-navy-800">No matching students found</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Try relaxing your search query or column filters.
+                        </p>
+                      </>
+                    )}
                   </td>
                 </tr>
               ) : (
