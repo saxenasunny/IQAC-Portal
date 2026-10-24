@@ -113,33 +113,7 @@ begin
     now()
   );
 
-  -- 5a. Ensure optional GoTrue token columns are empty strings if present
-  begin
-    update auth.users
-    set
-      confirmation_token = coalesce(confirmation_token, ''),
-      recovery_token = coalesce(recovery_token, ''),
-      email_change = coalesce(email_change, ''),
-      email_change_token_new = coalesce(email_change_token_new, ''),
-      email_change_token_current = coalesce(email_change_token_current, ''),
-      phone_change = coalesce(phone_change, ''),
-      phone_change_token = coalesce(phone_change_token, ''),
-      reauthentication_token = coalesce(reauthentication_token, '')
-    where id = v_user_id;
-  exception when others then
-    null;
-  end;
-
-  -- 5b. Set confirmed_at if column exists
-  begin
-    update auth.users
-    set confirmed_at = now()
-    where id = v_user_id and confirmed_at is null;
-  exception when others then
-    null;
-  end;
-
-  -- 5c. Create entry in auth.identities
+  -- 5a. Create entry in auth.identities
   begin
     insert into auth.identities (
       id,

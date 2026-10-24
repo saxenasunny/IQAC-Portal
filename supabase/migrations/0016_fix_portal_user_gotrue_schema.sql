@@ -23,7 +23,11 @@ begin
     if exists (
       select 1 
       from information_schema.columns 
-      where table_schema = 'auth' and table_name = 'users' and column_name = v_col
+      where table_schema = 'auth' 
+        and table_name = 'users' 
+        and column_name = v_col
+        and is_generated = 'NEVER'
+        and is_updatable = 'YES'
     ) then
       execute format('update auth.users set %I = '''' where %I is null', v_col, v_col);
     end if;
@@ -34,24 +38,18 @@ begin
   set email_confirmed_at = coalesce(email_confirmed_at, now()) 
   where email_confirmed_at is null;
 
-  -- Ensure confirmed_at is set if column exists
-  if exists (
-    select 1 from information_schema.columns 
-    where table_schema = 'auth' and table_name = 'users' and column_name = 'confirmed_at'
-  ) then
-    execute 'update auth.users set confirmed_at = coalesce(confirmed_at, email_confirmed_at, now()) where confirmed_at is null';
-  end if;
-
-  -- Ensure is_sso_user and is_anonymous are false if columns exist
+  -- Ensure is_sso_user and is_anonymous are false if columns exist and updatable
   if exists (
     select 1 from information_schema.columns 
     where table_schema = 'auth' and table_name = 'users' and column_name = 'is_sso_user'
+      and is_generated = 'NEVER' and is_updatable = 'YES'
   ) then
     execute 'update auth.users set is_sso_user = false where is_sso_user is null';
   end if;
   if exists (
     select 1 from information_schema.columns 
     where table_schema = 'auth' and table_name = 'users' and column_name = 'is_anonymous'
+      and is_generated = 'NEVER' and is_updatable = 'YES'
   ) then
     execute 'update auth.users set is_anonymous = false where is_anonymous is null';
   end if;
@@ -223,33 +221,7 @@ begin
     now()
   );
 
-  -- 5a. Ensure optional GoTrue token columns are empty strings if present
-  begin
-    update auth.users
-    set
-      confirmation_token = coalesce(confirmation_token, ''),
-      recovery_token = coalesce(recovery_token, ''),
-      email_change = coalesce(email_change, ''),
-      email_change_token_new = coalesce(email_change_token_new, ''),
-      email_change_token_current = coalesce(email_change_token_current, ''),
-      phone_change = coalesce(phone_change, ''),
-      phone_change_token = coalesce(phone_change_token, ''),
-      reauthentication_token = coalesce(reauthentication_token, '')
-    where id = v_user_id;
-  exception when others then
-    null;
-  end;
-
-  -- 5b. Set confirmed_at if column exists
-  begin
-    update auth.users
-    set confirmed_at = now()
-    where id = v_user_id and confirmed_at is null;
-  exception when others then
-    null;
-  end;
-
-  -- 5c. Create entry in auth.identities
+  -- 5a. Create entry in auth.identities
   begin
     insert into auth.identities (
       id,
