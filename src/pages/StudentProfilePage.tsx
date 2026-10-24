@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Badge, Button, Card, PageHeader, statusTone } from '@/components/ui'
@@ -6,6 +6,7 @@ import { canSeeSensitive, canWriteData } from '@/lib/access'
 import { batchLabel, departmentName, programmeName, schoolName } from '@/lib/lookups'
 import { formatDate, maskSensitive } from '@/lib/utils'
 import { usePortalStore } from '@/store/portalStore'
+import { studentService } from '@/services/studentService'
 
 const TABS = ['Overview', 'Academic', 'Personal', 'Contact', 'Family', 'Qualification', 'Entrance Exams', 'Experience', 'Documents', 'History'] as const
 
@@ -14,9 +15,23 @@ export function StudentProfilePage() {
   const navigate = useNavigate()
   const user = usePortalStore((s) => s.currentUser)!
   const student = usePortalStore((s) => s.students.find((x) => x.id === id))
+  const upsertStudent = usePortalStore((s) => s.upsertStudent)
   const archiveStudent = usePortalStore((s) => s.archiveStudent)
   const documents = usePortalStore((s) => s.documents)
   const [tab, setTab] = useState<(typeof TABS)[number]>('Overview')
+
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    void studentService.getById(id).then((full) => {
+      if (!cancelled && full) {
+        upsertStudent(full)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [id, upsertStudent])
 
   if (!student) {
     return (

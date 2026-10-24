@@ -214,39 +214,144 @@ function toImportRow(student: Student): Row {
   }
 }
 
+function toStudentFromDbRow(row: Record<string, unknown>): Student {
+  const programmeId = text(row.programme_id)
+  const departmentId = text(row.department_id)
+  const schoolId = text(row.school_id)
+  const batchId = text(row.batch_id)
+  const academicYearId = text(row.academic_year_id)
+  const gender = text(row.gender) as Gender
+
+  const fullName = text(row.full_name)
+  const nameParts = fullName.trim().split(/\s+/)
+  const firstName = nameParts[0] || ''
+  const lastName = nameParts.slice(1).join(' ') || ''
+
+  return {
+    id: text(row.id),
+    registrationId: text(row.registration_id),
+    applicationNumber: text(row.application_number),
+    universityRollNumber: text(row.university_roll_number),
+    fullName,
+    email: text(row.email),
+    phone: text(row.phone),
+    gender: GENDERS.includes(gender) ? gender : 'prefer_not_to_say',
+    dateOfBirth: text(row.date_of_birth),
+    nationality: text(row.nationality, 'India'),
+    programmeId,
+    departmentId,
+    schoolId,
+    batchId,
+    academicYearId,
+    currentYear: number(row.current_year, 1),
+    currentTerm: text(row.current_term),
+    studentStatus: STUDENT_STATUSES.includes(row.student_status as Student['studentStatus'])
+      ? (row.student_status as Student['studentStatus'])
+      : 'active',
+    academicStatus: ACADEMIC_STATUSES.includes(row.academic_status as Student['academicStatus'])
+      ? (row.academic_status as Student['academicStatus'])
+      : 'regular',
+    admissionType: text(row.admission_type),
+    quota: text(row.quota) || undefined,
+    workflow: WORKFLOWS.includes(row.workflow as Student['workflow'])
+      ? (row.workflow as Student['workflow'])
+      : 'submitted',
+    isArchived: row.is_archived === true,
+    personal: {
+      firstName,
+      lastName,
+      category: 'General',
+      domicileState: '',
+      firstGeneration: false,
+      differentlyAbled: false,
+      ews: false,
+    },
+    academic: {
+      backlogs: 0,
+      admissionDate: '',
+    },
+    contact: {},
+    addresses: [],
+    family: {},
+    qualifications: [],
+    entranceExams: [],
+    customFields: {},
+    createdAt: text(row.created_at),
+    updatedAt: text(row.updated_at),
+  }
+}
+
 export const studentService = {
   async listPortal(): Promise<Student[]> {
     if (!supabase) throw new Error('Supabase is not configured.')
 
-    // 1. Try fast single-roundtrip bundle first (~1s for all records)
-    try {
-      const { data, error } = await supabase.rpc('list_portal_students_bundle')
-      if (!error && Array.isArray(data)) {
-        return data.map(mapStudent)
-      }
-    } catch {
-      // Fallback below
-    }
-
-    // 2. Fallback to paginated list_portal_students if bundle is not yet applied in DB
+    // Direct, ultra-fast table query on public.students
+    // Avoids massive multi-table JSON joins that cause database statement_timeout
     const allStudents: Student[] = []
-    const PAGE_SIZE = 1000
+    const PAGE_SIZE = 2500
     let from = 0
 
     while (true) {
       const { data, error } = await supabase
-        .rpc('list_portal_students')
+        .from('students')
+        .select('id, registration_id, application_number, university_roll_number, full_name, email, phone, gender, date_of_birth, nationality, school_id, department_id, programme_id, batch_id, academic_year_id, current_year, current_term, student_status, academic_status, admission_type, quota, workflow, is_archived, created_at, updated_at')
+        .order('registration_id', { ascending: true })
         .range(from, from + PAGE_SIZE - 1)
 
       if (error) {
         throw new Error(error.message || `Database error (${error.code || 'unknown'}) loading students`)
       }
       if (!Array.isArray(data) || data.length === 0) break
-      allStudents.push(...data.map(mapStudent))
+      allStudents.push(...data.map(toStudentFromDbRow))
       if (data.length < PAGE_SIZE) break
       from += PAGE_SIZE
     }
     return allStudents
+  },
+
+  async getById(id: string): Promise<Student | null> {
+    if (!supabase) throw new Error('Supabase is not configured.')
+    const [studentRes, portalDataRes, sensitiveRes, familyRes] = await Promise.all([
+      supabase.from('students').select('*').eq('id', id).maybeSingle(),
+      supabase.from('student_portal_data').select('data').eq('student_id', id).maybeSingle(),
+      supabase.from('student_sensitive').select('*').eq('student_id', id).maybeSingle(),
+      supabase.from('student_family').select('*').eq('student_id', id).maybeSingle(),
+    ])
+
+    if (studentRes.error || !studentRes.data) return null
+    const base = toStudentFromDbRow(studentRes.data)
+    const portalData = portalDataRes.data?.data ? mapStudent(portalDataRes.data.data) : null
+
+    return {
+      ...base,
+      ...(portalData ?? {}),
+      id: base.id,
+      registrationId: base.registrationId,
+      fullName: base.fullName,
+      email: base.email,
+      phone: base.phone,
+      programmeId: base.programmeId || portalData?.programmeId || '',
+      departmentId: base.departmentId || portalData?.departmentId || '',
+      schoolId: base.schoolId || portalData?.schoolId || '',
+      sensitive: sensitiveRes.data ? {
+        aadhaar: sensitiveRes.data.aadhaar ?? undefined,
+        pan: sensitiveRes.data.pan ?? undefined,
+        bankAccount: sensitiveRes.data.bank_account ?? undefined,
+        ifsc: sensitiveRes.data.ifsc ?? undefined,
+        abcId: sensitiveRes.data.abc_id ?? undefined,
+        additionalIdentifiers: sensitiveRes.data.additional_identifiers ?? undefined,
+      } : portalData?.sensitive,
+      family: {
+        ...(portalData?.family ?? {}),
+        ...(familyRes.data ? {
+          fatherName: familyRes.data.father_name ?? undefined,
+          fatherOccupation: familyRes.data.father_occupation ?? undefined,
+          motherName: familyRes.data.mother_name ?? undefined,
+          motherOccupation: familyRes.data.mother_occupation ?? undefined,
+          annualIncome: familyRes.data.annual_income ?? undefined,
+        } : {}),
+      },
+    }
   },
 
   async commitImport(
