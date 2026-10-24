@@ -12,7 +12,7 @@ create or replace function public.admin_create_portal_user(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, auth, pg_temp
+set search_path = public, auth, extensions, pg_temp
 as $$
 declare
   v_caller_role public.user_role;
@@ -73,7 +73,11 @@ begin
 
   -- 5. Create user in auth.users
   v_user_id := gen_random_uuid();
-  v_encrypted_pw := crypt(p_password, gen_salt('bf'));
+  begin
+    v_encrypted_pw := extensions.crypt(p_password, extensions.gen_salt('bf'));
+  exception when others then
+    v_encrypted_pw := crypt(p_password, gen_salt('bf'));
+  end;
 
   insert into auth.users (
     id,
@@ -105,6 +109,7 @@ begin
   begin
     insert into auth.identities (
       id,
+      provider_id,
       user_id,
       identity_data,
       provider,
@@ -112,6 +117,7 @@ begin
       created_at,
       updated_at
     ) values (
+      v_user_id::text,
       v_user_id::text,
       v_user_id,
       jsonb_build_object('sub', v_user_id::text, 'email', lower(btrim(p_email))),
@@ -122,8 +128,28 @@ begin
     )
     on conflict do nothing;
   exception when others then
-    -- Table may have different columns in older Supabase instances; safe to ignore
-    null;
+    begin
+      insert into auth.identities (
+        id,
+        user_id,
+        identity_data,
+        provider,
+        last_sign_in_at,
+        created_at,
+        updated_at
+      ) values (
+        v_user_id::text,
+        v_user_id,
+        jsonb_build_object('sub', v_user_id::text, 'email', lower(btrim(p_email))),
+        'email',
+        now(),
+        now(),
+        now()
+      )
+      on conflict do nothing;
+    exception when others then
+      null;
+    end;
   end;
 
   -- 6. Create profile in public.profiles
