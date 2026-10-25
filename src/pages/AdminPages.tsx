@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select } from '@/components/ui'
-import { canCreateUsers, canManageUsers, canSeeAudit, ROLE_LABELS } from '@/lib/access'
+import { canCreateUsers, canDeactivateUsers, canManageUsers, canSeeAudit, ROLE_LABELS } from '@/lib/access'
 import { roleCatalog } from '@/data/seed'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { userService, type PortalUser } from '@/services/userService'
@@ -25,8 +25,13 @@ export function UsersPage() {
   const [departmentCode, setDepartmentCode] = useState('')
   const canManage = canManageUsers(currentUser.role)
   const canCreate = canCreateUsers(currentUser.role)
+  const canDeactivate = canDeactivateUsers(currentUser.role)
 
   async function toggleStatus(targetUser: PortalUser) {
+    if (!canDeactivate) {
+      toast.error('Only a Super Administrator has permission to activate or deactivate users.')
+      return
+    }
     if (targetUser.id === currentUser.id) {
       toast.error('You cannot change your own active status.')
       return
@@ -122,7 +127,13 @@ export function UsersPage() {
         <Card className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-navy-950 text-left text-white">
-              <tr>{['Name', 'Email', 'Role', 'Scope', 'Status', 'Action'].map((heading) => <th key={heading} className="px-4 py-3">{heading}</th>)}</tr>
+              <tr>
+                {['Name', 'Email', 'Role', 'Scope', 'Status', ...(canDeactivate ? ['Action'] : [])].map((heading) => (
+                  <th key={heading} className={`px-4 py-3 ${heading === 'Action' ? 'text-right' : ''}`}>
+                    {heading}
+                  </th>
+                ))}
+              </tr>
             </thead>
             <tbody>
               {users.map((user) => (
@@ -132,19 +143,21 @@ export function UsersPage() {
                   <td className="px-4 py-2">{ROLE_LABELS[user.role]}</td>
                   <td className="px-4 py-2">{catalog.departments.find((department) => department.id === user.departmentId)?.name ?? catalog.schools.find((school) => school.id === user.schoolId)?.name ?? 'Institution-wide'}</td>
                   <td className="px-4 py-2"><Badge tone={user.isActive ? 'green' : 'red'}>{user.isActive ? 'Active' : 'Inactive'}</Badge></td>
-                  <td className="px-4 py-2">
-                    {user.id !== currentUser.id ? (
-                      <button
-                        type="button"
-                        onClick={() => void toggleStatus(user)}
-                        className="text-xs text-navy-600 hover:text-navy-900 underline font-medium cursor-pointer"
-                      >
-                        {user.isActive ? 'Deactivate' : 'Activate'}
-                      </button>
-                    ) : (
-                      <span className="text-xs text-slate-400">Current</span>
-                    )}
-                  </td>
+                  {canDeactivate && (
+                    <td className="px-4 py-2 text-right">
+                      {user.id !== currentUser.id ? (
+                        <button
+                          type="button"
+                          onClick={() => void toggleStatus(user)}
+                          className="text-xs text-navy-600 hover:text-navy-900 underline font-medium cursor-pointer"
+                        >
+                          {user.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">Current</span>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -221,7 +234,8 @@ export function PermissionsPage() {
     ['import.execute', 'Data', 'Admin, registrar, data entry'],
     ['audit.read', 'Admin', 'Super admin, IQAC admin, auditor, registrar'],
     ['users.create', 'Admin', 'Super admin only'],
-    ['users.manage', 'Admin', 'Super admin, IQAC admin'],
+    ['users.deactivate', 'Admin', 'Super admin only'],
+    ['users.manage', 'Admin', 'Super admin (full), IQAC admin (view)'],
   ]
   return (
     <div>

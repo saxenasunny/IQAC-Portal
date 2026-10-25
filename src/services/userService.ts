@@ -103,6 +103,11 @@ export const userService = {
   },
 
   async updateStatus(userId: string, isActive: boolean): Promise<void> {
+    const currentUser = usePortalStore.getState().currentUser
+    if (currentUser && currentUser.role !== 'super_admin') {
+      throw new Error('Only a super administrator can activate or deactivate portal users.')
+    }
+
     const client = requireSupabase()
     const { error } = await client
       .from('profiles')
