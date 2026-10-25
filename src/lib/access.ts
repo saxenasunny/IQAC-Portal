@@ -44,6 +44,10 @@ export function canCreateUsers(role: UserRole) {
   return role === 'super_admin'
 }
 
+export function canEditUsers(role: UserRole) {
+  return role === 'super_admin'
+}
+
 export function canDeactivateUsers(role: UserRole) {
   return role === 'super_admin'
 }

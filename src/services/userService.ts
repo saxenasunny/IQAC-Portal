@@ -15,6 +15,17 @@ export interface CreatePortalUser {
   departmentCode?: string
 }
 
+export interface UpdatePortalUser {
+  id: string
+  email: string
+  fullName: string
+  password?: string
+  role: UserRole
+  schoolCode?: string
+  departmentCode?: string
+  phone?: string
+}
+
 function requireSupabase() {
   if (!supabase) throw new Error('Configure Supabase before managing portal users.')
   return supabase
@@ -94,6 +105,33 @@ export const userService = {
         throw error
       }
       if (!data || data.success !== true) throw new Error('The server did not confirm user creation.')
+      return
+    }
+
+    if (rpcError) {
+      throw new Error(rpcError.message)
+    }
+  },
+
+  async update(user: UpdatePortalUser): Promise<void> {
+    const currentUser = usePortalStore.getState().currentUser
+    if (currentUser && currentUser.role !== 'super_admin') {
+      throw new Error('Only a super administrator can edit user profiles.')
+    }
+
+    const client = requireSupabase()
+    const { data: rpcData, error: rpcError } = await client.rpc('admin_update_portal_user', {
+      p_user_id: user.id,
+      p_email: user.email,
+      p_full_name: user.fullName,
+      p_password: user.password ? user.password : null,
+      p_role: user.role,
+      p_school_code: user.schoolCode ?? null,
+      p_department_code: user.departmentCode ?? null,
+      p_phone: user.phone ?? null,
+    })
+
+    if (!rpcError && (rpcData as { success?: boolean })?.success) {
       return
     }
 

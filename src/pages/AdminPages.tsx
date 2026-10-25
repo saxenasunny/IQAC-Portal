@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select } from '@/components/ui'
-import { canCreateUsers, canDeactivateUsers, canManageUsers, canSeeAudit, ROLE_LABELS } from '@/lib/access'
+import { canCreateUsers, canDeactivateUsers, canEditUsers, canManageUsers, canSeeAudit, ROLE_LABELS } from '@/lib/access'
 import { roleCatalog } from '@/data/seed'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { userService, type PortalUser } from '@/services/userService'
@@ -14,6 +14,8 @@ export function UsersPage() {
   const [users, setUsers] = useState<PortalUser[]>([])
   const [loading, setLoading] = useState(isSupabaseConfigured)
   const [error, setError] = useState('')
+
+  // Create user modal state
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [name, setName] = useState('')
@@ -23,9 +25,24 @@ export function UsersPage() {
   const [role, setRole] = useState<UserRole>('iqac_viewer')
   const [schoolCode, setSchoolCode] = useState('')
   const [departmentCode, setDepartmentCode] = useState('')
+
+  // Edit user modal state
+  const [editOpen, setEditOpen] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editUserId, setEditUserId] = useState('')
+  const [editName, setEditName] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editRole, setEditRole] = useState<UserRole>('iqac_viewer')
+  const [editSchoolCode, setEditSchoolCode] = useState('')
+  const [editDepartmentCode, setEditDepartmentCode] = useState('')
+  const [editPassword, setEditPassword] = useState('')
+  const [editConfirmPassword, setEditConfirmPassword] = useState('')
+
   const canManage = canManageUsers(currentUser.role)
   const canCreate = canCreateUsers(currentUser.role)
+  const canEdit = canEditUsers(currentUser.role)
   const canDeactivate = canDeactivateUsers(currentUser.role)
+  const canActOnUsers = canEdit || canDeactivate
 
   async function toggleStatus(targetUser: PortalUser) {
     if (!canDeactivate) {
@@ -42,6 +59,68 @@ export function UsersPage() {
       await loadUsers()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Unable to update user status.')
+    }
+  }
+
+  function openEditModal(target: PortalUser) {
+    const school = catalog.schools.find((s) => s.id === target.schoolId)
+    const department = catalog.departments.find((d) => d.id === target.departmentId)
+    setEditUserId(target.id)
+    setEditName(target.fullName)
+    setEditEmail(target.email)
+    setEditRole(target.role)
+    setEditSchoolCode(school?.code ?? '')
+    setEditDepartmentCode(department?.code ?? '')
+    setEditPassword('')
+    setEditConfirmPassword('')
+    setEditOpen(true)
+  }
+
+  async function saveUserEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!canEdit) {
+      toast.error('Only a super administrator has permission to edit portal users.')
+      return
+    }
+    if (editPassword && editPassword !== editConfirmPassword) {
+      toast.error('The passwords do not match.')
+      return
+    }
+    if (editPassword && editPassword.length < 6) {
+      toast.error('New password must be at least 6 characters.')
+      return
+    }
+
+    setEditSaving(true)
+    try {
+      await userService.update({
+        id: editUserId,
+        fullName: editName,
+        email: editEmail,
+        password: editPassword || undefined,
+        role: editRole,
+        ...(editRole === 'dean' ? { schoolCode: editSchoolCode } : {}),
+        ...(['hod', 'faculty'].includes(editRole) ? { departmentCode: editDepartmentCode } : {}),
+      })
+
+      // If user edited their own profile, keep currentUser in store updated
+      if (editUserId === currentUser.id) {
+        usePortalStore.getState().setAuthenticatedUser({
+          ...currentUser,
+          fullName: editName,
+          email: editEmail,
+          role: editRole,
+        })
+      }
+
+      toast.success(`Successfully updated profile for ${editEmail}.`)
+      setEditOpen(false)
+      await loadUsers()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to update user profile.'
+      toast.error(message)
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -128,7 +207,7 @@ export function UsersPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-navy-950 text-left text-white">
               <tr>
-                {['Name', 'Email', 'Role', 'Scope', 'Status', ...(canDeactivate ? ['Action'] : [])].map((heading) => (
+                {['Name', 'Email', 'Role', 'Scope', 'Status', ...(canActOnUsers ? ['Action'] : [])].map((heading) => (
                   <th key={heading} className={`px-4 py-3 ${heading === 'Action' ? 'text-right' : ''}`}>
                     {heading}
                   </th>
@@ -138,24 +217,36 @@ export function UsersPage() {
             <tbody>
               {users.map((user) => (
                 <tr key={user.id} className="border-t">
-                  <td className="px-4 py-2">{user.fullName}</td>
+                  <td className="px-4 py-2 font-medium text-navy-950">{user.fullName}</td>
                   <td className="px-4 py-2">{user.email}</td>
                   <td className="px-4 py-2">{ROLE_LABELS[user.role]}</td>
                   <td className="px-4 py-2">{catalog.departments.find((department) => department.id === user.departmentId)?.name ?? catalog.schools.find((school) => school.id === user.schoolId)?.name ?? 'Institution-wide'}</td>
                   <td className="px-4 py-2"><Badge tone={user.isActive ? 'green' : 'red'}>{user.isActive ? 'Active' : 'Inactive'}</Badge></td>
-                  {canDeactivate && (
+                  {canActOnUsers && (
                     <td className="px-4 py-2 text-right">
-                      {user.id !== currentUser.id ? (
-                        <button
-                          type="button"
-                          onClick={() => void toggleStatus(user)}
-                          className="text-xs text-navy-600 hover:text-navy-900 underline font-medium cursor-pointer"
-                        >
-                          {user.isActive ? 'Deactivate' : 'Activate'}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-slate-400">Current</span>
-                      )}
+                      <div className="flex items-center justify-end gap-2.5">
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(user)}
+                            className="text-xs text-navy-700 hover:text-navy-950 underline font-semibold cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {canDeactivate && user.id !== currentUser.id && (
+                          <button
+                            type="button"
+                            onClick={() => void toggleStatus(user)}
+                            className="text-xs text-slate-500 hover:text-red-700 underline font-medium cursor-pointer"
+                          >
+                            {user.isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                        )}
+                        {canDeactivate && user.id === currentUser.id && (
+                          <span className="text-xs text-slate-400">Current</span>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -164,6 +255,8 @@ export function UsersPage() {
           </table>
         </Card>
       )}
+
+      {/* Create User Modal */}
       {canCreate && (
         <Modal open={open} title="Create portal user" onClose={() => { if (!saving) setOpen(false) }}>
           <form className="space-y-4" onSubmit={(event) => void createUser(event)}>
@@ -204,6 +297,123 @@ export function UsersPage() {
           </form>
         </Modal>
       )}
+
+      {/* Edit User Modal (Super Admin only) */}
+      {canEdit && (
+        <Modal open={editOpen} title="Edit portal user" onClose={() => { if (!editSaving) setEditOpen(false) }}>
+          <form className="space-y-4" onSubmit={(event) => void saveUserEdit(event)}>
+            <Field label="Full name">
+              <Input
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+                required
+                maxLength={150}
+              />
+            </Field>
+
+            <Field label="Email">
+              <Input
+                type="email"
+                value={editEmail}
+                onChange={(event) => setEditEmail(event.target.value)}
+                required
+              />
+            </Field>
+
+            <Field label="Role">
+              <Select
+                value={editRole}
+                onChange={(event) => setEditRole(event.target.value as UserRole)}
+              >
+                {roleCatalog.map((entry) => (
+                  <option key={entry.role} value={entry.role}>
+                    {ROLE_LABELS[entry.role]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            {editRole === 'dean' ? (
+              <Field label="School scope">
+                <Select
+                  value={editSchoolCode}
+                  onChange={(event) => setEditSchoolCode(event.target.value)}
+                  required
+                >
+                  <option value="">Select a school</option>
+                  {catalog.schools.map((school) => (
+                    <option key={school.code} value={school.code}>
+                      {school.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
+
+            {editRole === 'hod' || editRole === 'faculty' ? (
+              <Field label="Department scope">
+                <Select
+                  value={editDepartmentCode}
+                  onChange={(event) => setEditDepartmentCode(event.target.value)}
+                  required
+                >
+                  <option value="">Select a department</option>
+                  {catalog.departments.map((department) => (
+                    <option key={department.code} value={department.code}>
+                      {department.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
+
+            <div className="border-t border-navy-100 pt-3">
+              <Field
+                label="New password (optional)"
+                hint="Leave blank to keep existing password, or enter at least 6 characters to reset."
+              >
+                <Input
+                  type="password"
+                  value={editPassword}
+                  onChange={(event) => setEditPassword(event.target.value)}
+                  minLength={6}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  placeholder="Leave blank to keep current password"
+                />
+              </Field>
+            </div>
+
+            {editPassword ? (
+              <Field label="Confirm new password">
+                <Input
+                  type="password"
+                  value={editConfirmPassword}
+                  onChange={(event) => setEditConfirmPassword(event.target.value)}
+                  minLength={6}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  required
+                />
+              </Field>
+            ) : null}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={editSaving}
+                onClick={() => setEditOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={editSaving}>
+                {editSaving ? 'Saving…' : 'Save changes'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   )
 }
@@ -234,6 +444,7 @@ export function PermissionsPage() {
     ['import.execute', 'Data', 'Admin, registrar, data entry'],
     ['audit.read', 'Admin', 'Super admin, IQAC admin, auditor, registrar'],
     ['users.create', 'Admin', 'Super admin only'],
+    ['users.edit', 'Admin', 'Super admin only'],
     ['users.deactivate', 'Admin', 'Super admin only'],
     ['users.manage', 'Admin', 'Super admin (full), IQAC admin (view)'],
   ]
