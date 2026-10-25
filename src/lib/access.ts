@@ -40,6 +40,10 @@ export function canManageUsers(role: UserRole) {
   return ADMIN_USERS.has(role)
 }
 
+export function canCreateUsers(role: UserRole) {
+  return role === 'super_admin'
+}
+
 export function canImport(role: UserRole) {
   return IMPORT.has(role)
 }

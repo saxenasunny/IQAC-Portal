@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { catalog } from '@/store/portalStore'
+import { catalog, usePortalStore } from '@/store/portalStore'
 import type { Profile, UserRole } from '@/types'
 
 export interface PortalUser extends Profile {
@@ -61,6 +61,11 @@ export const userService = {
   },
 
   async create(user: CreatePortalUser): Promise<void> {
+    const currentUser = usePortalStore.getState().currentUser
+    if (currentUser && currentUser.role !== 'super_admin') {
+      throw new Error('Only a super administrator can create portal users.')
+    }
+
     const client = requireSupabase()
 
     // 1. Try PostgreSQL stored procedure first (direct, zero edge function deployment needed)

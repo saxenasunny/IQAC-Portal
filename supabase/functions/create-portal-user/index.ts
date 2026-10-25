@@ -90,11 +90,8 @@ Deno.serve(async (request: Request) => {
     .select('id,full_name,role,is_active')
     .eq('id', callerResult.user.id)
     .single()
-  if (profileError || !callerProfile?.is_active || !['super_admin', 'iqac_admin'].includes(callerProfile.role)) {
-    return respond(403, { error: 'Only an active super administrator or IQAC administrator can manage users.' })
-  }
-  if (role === 'super_admin' && callerProfile.role !== 'super_admin') {
-    return respond(403, { error: 'Only a super administrator can assign the super administrator role.' })
+  if (profileError || !callerProfile?.is_active || callerProfile.role !== 'super_admin') {
+    return respond(403, { error: 'Only an active super administrator can create portal users.' })
   }
 
   let schoolId: string | null = null

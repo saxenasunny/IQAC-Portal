@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, PageHeader, Select } from '@/components/ui'
-import { canManageUsers, canSeeAudit, ROLE_LABELS } from '@/lib/access'
+import { canCreateUsers, canManageUsers, canSeeAudit, ROLE_LABELS } from '@/lib/access'
 import { roleCatalog } from '@/data/seed'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { userService, type PortalUser } from '@/services/userService'
@@ -24,6 +24,7 @@ export function UsersPage() {
   const [schoolCode, setSchoolCode] = useState('')
   const [departmentCode, setDepartmentCode] = useState('')
   const canManage = canManageUsers(currentUser.role)
+  const canCreate = canCreateUsers(currentUser.role)
 
   async function toggleStatus(targetUser: PortalUser) {
     if (targetUser.id === currentUser.id) {
@@ -59,6 +60,10 @@ export function UsersPage() {
 
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!canCreate) {
+      toast.error('Only a super administrator has permission to create portal users.')
+      return
+    }
     if (password !== confirmPassword) {
       toast.error('The passwords do not match.')
       return
@@ -100,7 +105,7 @@ export function UsersPage() {
       <PageHeader
         title="Users"
         subtitle="Manage Supabase accounts and assign portal roles and academic scopes."
-        actions={<Button disabled={!isSupabaseConfigured} onClick={() => setOpen(true)}>Create User</Button>}
+        actions={canCreate ? <Button disabled={!isSupabaseConfigured} onClick={() => setOpen(true)}>Create User</Button> : undefined}
       />
       {!isSupabaseConfigured ? (
         <Card className="p-6 text-sm text-amber-800">Configure Supabase to create and manage users. Demo users are disabled.</Card>
@@ -146,45 +151,46 @@ export function UsersPage() {
           </table>
         </Card>
       )}
-      <Modal open={open} title="Create portal user" onClose={() => { if (!saving) setOpen(false) }}>
-        <form className="space-y-4" onSubmit={(event) => void createUser(event)}>
-          <Field label="Full name"><Input value={name} onChange={(event) => setName(event.target.value)} required maxLength={150} /></Field>
-          <Field label="Email"><Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></Field>
-          <Field label="Role">
-            <Select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
-              {roleCatalog
-                .filter((entry) => currentUser.role === 'super_admin' || entry.role !== 'super_admin')
-                .map((entry) => <option key={entry.role} value={entry.role}>{ROLE_LABELS[entry.role]}</option>)}
-            </Select>
-          </Field>
-          {role === 'dean' ? (
-            <Field label="School scope">
-              <Select value={schoolCode} onChange={(event) => setSchoolCode(event.target.value)} required>
-                <option value="">Select a school</option>
-                {catalog.schools.map((school) => <option key={school.code} value={school.code}>{school.name}</option>)}
+      {canCreate && (
+        <Modal open={open} title="Create portal user" onClose={() => { if (!saving) setOpen(false) }}>
+          <form className="space-y-4" onSubmit={(event) => void createUser(event)}>
+            <Field label="Full name"><Input value={name} onChange={(event) => setName(event.target.value)} required maxLength={150} /></Field>
+            <Field label="Email"><Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></Field>
+            <Field label="Role">
+              <Select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
+                {roleCatalog
+                  .map((entry) => <option key={entry.role} value={entry.role}>{ROLE_LABELS[entry.role]}</option>)}
               </Select>
             </Field>
-          ) : null}
-          {role === 'hod' || role === 'faculty' ? (
-            <Field label="Department scope">
-              <Select value={departmentCode} onChange={(event) => setDepartmentCode(event.target.value)} required>
-                <option value="">Select a department</option>
-                {catalog.departments.map((department) => <option key={department.code} value={department.code}>{department.name}</option>)}
-              </Select>
+            {role === 'dean' ? (
+              <Field label="School scope">
+                <Select value={schoolCode} onChange={(event) => setSchoolCode(event.target.value)} required>
+                  <option value="">Select a school</option>
+                  {catalog.schools.map((school) => <option key={school.code} value={school.code}>{school.name}</option>)}
+                </Select>
+              </Field>
+            ) : null}
+            {role === 'hod' || role === 'faculty' ? (
+              <Field label="Department scope">
+                <Select value={departmentCode} onChange={(event) => setDepartmentCode(event.target.value)} required>
+                  <option value="">Select a department</option>
+                  {catalog.departments.map((department) => <option key={department.code} value={department.code}>{department.name}</option>)}
+                </Select>
+              </Field>
+            ) : null}
+            <Field label="Initial password" hint="Use at least 6 characters. Share it with the user through a secure channel.">
+              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} maxLength={128} autoComplete="new-password" required />
             </Field>
-          ) : null}
-          <Field label="Initial password" hint="Use at least 6 characters. Share it with the user through a secure channel.">
-            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} maxLength={128} autoComplete="new-password" required />
-          </Field>
-          <Field label="Confirm password">
-            <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={6} maxLength={128} autoComplete="new-password" required />
-          </Field>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create user'}</Button>
-          </div>
-        </form>
-      </Modal>
+            <Field label="Confirm password">
+              <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={6} maxLength={128} autoComplete="new-password" required />
+            </Field>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create user'}</Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   )
 }
@@ -214,6 +220,7 @@ export function PermissionsPage() {
     ['documents.write', 'Documents', 'Admin, HOD, dean, data entry'],
     ['import.execute', 'Data', 'Admin, registrar, data entry'],
     ['audit.read', 'Admin', 'Super admin, IQAC admin, auditor, registrar'],
+    ['users.create', 'Admin', 'Super admin only'],
     ['users.manage', 'Admin', 'Super admin, IQAC admin'],
   ]
   return (
